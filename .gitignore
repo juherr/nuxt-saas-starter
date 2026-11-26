@@ -28,6 +28,7 @@ logs
 
 server/db/migrations
 tests/coverage
+test-results/
 .wrangler/
 wrangler.toml
 wrangler.jsonc

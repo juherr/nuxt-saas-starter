@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Dependabot version updates.
 # Keys and values checked against
-# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+# https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
 version: 2
 
 updates:
@@ -36,7 +36,12 @@ updates:
       prefix-development: chore(deps-dev)
 
   - package-ecosystem: github-actions
-    directory: /
+    # `/` alone covers .github/workflows and a root action.yml only; the
+    # composite actions need their own entry. `directories` accepts globs,
+    # `directory` does not, and the two keys cannot be combined.
+    directories:
+      - /
+      - /.github/actions/*
     schedule:
       interval: weekly
       day: monday

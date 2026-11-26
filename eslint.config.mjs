@@ -8,11 +8,6 @@ export default withNuxt(
     // ...@antfu/eslint-config options
     // Vue ESLint Rule: https://eslint.vuejs.org/rules/
     markdown: false,
-    // antfu 10 turns the pnpm rules on whenever a pnpm-workspace.yaml
-    // exists (5.4 defaulted to false). Their autofix adds install
-    // settings (trustPolicy, shellEmulator, ...) to pnpm-workspace.yaml,
-    // which would change how installs behave: keep them off (#48).
-    pnpm: false,
     rules: {
       'style/comma-dangle': ['warn', 'never'],
       'style/brace-style': 'off',

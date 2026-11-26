@@ -35,13 +35,15 @@ export default defineNuxtRouteMiddleware(async (to) => {
       const { error } = await organization.setActive({ organizationId: targetOrg.id })
       if (error) {
         // The session stays on its organization: leave the requested one, never mark it active.
-        // Redirect to the active org, else any other one: the first may be the requested org.
+        // Only the active org is a safe fallback: arriving there needs no set-active. Any other
+        // org would be refused too and redirect back, looping inside one SSR request (#147).
+        // Without one, /403 as the route guards do: it has no :slug, so this middleware stops
+        // there, and it is translated, unlike Nuxt's default error page (no app/error.vue).
         console.error('[middleware/organization] setActive failed', error)
-        const fallbackOrg = orgs.value.find((o: any) => o.id === activeOrgId)
-          ?? orgs.value.find((o: any) => o.id !== targetOrg.id)
-        if (fallbackOrg)
-          return navigateTo(useLocalePath()(`/${fallbackOrg.slug}/dashboard`))
-        return
+        const sessionOrg = orgs.value.find(o => o.id === activeOrgId)
+        if (sessionOrg)
+          return navigateTo(useLocalePath()(`/${sessionOrg.slug}/dashboard`))
+        return navigateTo(useLocalePath()('/403'))
       }
       await fetchSession()
 
@@ -52,13 +54,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
       }
     }
   } else {
-    // Invalid slug, redirect to first available org or handle error
-    // We can redirect to the first org's dashboard if the user has access to any orgs
-    const firstOrg = orgs.value?.[0]
-    if (firstOrg) {
+    // Invalid slug: redirect to the active org, which needs no set-active, else the first one
+    const fallbackOrg = orgs.value.find(o => o.id === activeOrgId) ?? orgs.value[0]
+    if (fallbackOrg) {
       // Prevent infinite redirect if we are already redirected
       const localePath = useLocalePath()
-      const targetPath = localePath(`/${firstOrg.slug}/dashboard`)
+      const targetPath = localePath(`/${fallbackOrg.slug}/dashboard`)
       if (to.path !== targetPath) {
         return navigateTo(targetPath)
       }

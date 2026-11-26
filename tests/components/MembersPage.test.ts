@@ -18,7 +18,7 @@ interface RoleMenuItem {
 
 const { updateMemberRole, memberState } = vi.hoisted(() => ({
   updateMemberRole: vi.fn(),
-  memberState: { role: 'admin,member' }
+  memberState: { role: 'admin,member', viewerRole: 'owner' }
 }))
 
 mockNuxtImport('useToast', () => () => ({ add: vi.fn() }))
@@ -34,7 +34,7 @@ mockNuxtImport('useAuth', () => () => ({
       name: 'Acme',
       invitations: [],
       members: [
-        { id: 'member-1', userId: 'user-1', role: 'owner', user: { name: 'Olivia', email: 'olivia@example.com' } },
+        { id: 'member-1', userId: 'user-1', role: memberState.viewerRole, user: { name: 'Olivia', email: 'olivia@example.com' } },
         { id: 'member-2', userId: 'user-2', role: memberState.role, user: { name: 'Adam', email: 'adam@example.com' } }
       ]
     }
@@ -61,6 +61,7 @@ async function mountRoleMenu() {
 
 describe('members page role menu', () => {
   beforeEach(() => {
+    memberState.viewerRole = 'owner'
     updateMemberRole.mockReset()
     updateMemberRole.mockResolvedValue({ error: null })
   })
@@ -108,5 +109,31 @@ describe('members page role menu', () => {
     item('Member').onUpdateChecked(false)
 
     expect(updateMemberRole).not.toHaveBeenCalled()
+  })
+})
+
+describe('members page role badge', () => {
+  async function badgeTexts() {
+    const wrapper = await mountSuspended(MembersPage, {
+      global: { stubs: { MembersInviteForm: true } }
+    })
+    return wrapper.findAllComponents({ name: 'UBadge' }).map(b => b.text())
+  }
+
+  beforeEach(() => {
+    memberState.viewerRole = 'owner'
+  })
+
+  it('joins the role labels of a member seen by a read-only viewer', async () => {
+    memberState.viewerRole = 'member'
+    memberState.role = 'admin,member'
+
+    expect(await badgeTexts()).toContain('Admin, Member')
+  })
+
+  it('joins the role labels of an owner row seen by a manager', async () => {
+    memberState.role = 'owner,admin'
+
+    expect(await badgeTexts()).toContain('Owner, Admin')
   })
 })

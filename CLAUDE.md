@@ -1,14 +1,15 @@
 # nuxt-saas-starter
 
 ## Toolchain
-- Node 26 (`.nvmrc`), pnpm 12 via `packageManager`; run pnpm through that version, not a global shim.
+- Node 26 (`mise.toml`), pnpm 12 via `packageManager`; run pnpm through that version, not a global shim.
 - pnpm 12 rejects versions published < 24 h ago (`minimumReleaseAge` default, kept on purpose):
   a freshly resolved lockfile can fail `pnpm install --frozen-lockfile` in CI until the next day.
   Locally, `--config.minimum-release-age=0` passes that check without touching the lockfile: only
   with the user's go.
-- The shell's Node may be 22: run `mise exec node@26 -- corepack pnpm <cmd>`. Node ≥ 25 ships no
-  Corepack: install it once for Node 26 with `mise exec node@26 -- npm install -g corepack`. The husky
-  hook runs under the shell's Node and prints engine warnings (#41 moves pinning to mise).
+- The shell's Node may be 22: run `mise exec -- corepack pnpm <cmd>` (Node read from `mise.toml`).
+  Node ≥ 25 ships no Corepack: install it once with `mise exec -- npm install -g corepack`. The husky
+  hook runs under the shell's Node: Node 26 with `mise activate` in the shell, otherwise it prints
+  engine warnings.
 - Build scripts of dependencies are allow-listed in `pnpm-workspace.yaml` (`allowBuilds`).
 
 ## Run
@@ -36,7 +37,8 @@
 ## Checks
 - `pnpm lint --max-warnings=0` — also the husky pre-commit hook; never `--no-verify`.
 - `pnpm test:unit` (node project) · `pnpm test:ci` (unit + nuxt components, what CI runs) ·
-  `pnpm test` (all); the `e2e` project builds the app or targets `NUXT_TEST_APP_URL`, out of CI.
+  `pnpm test` (all); the `e2e` project targets `NUXT_TEST_APP_URL` (or builds the app) and runs
+  in the CI job `e2e` (`tests/CLAUDE.md`).
 - `pnpm typecheck` is blocking in CI and must stay at zero errors. Do not silence an error with
   `any`, `as unknown as`, `@ts-ignore`/`@ts-expect-error` or a non-null `!`. Use a guard instead.
 - `postgres` is loaded by NuxtHub and `ioredis` lazily by `server/utils/redis.ts`: only a booted app
@@ -65,7 +67,12 @@
 ## Conventions
 - Stripe: `apiVersion: Stripe.API_VERSION`; read period ends through
   `server/utils/stripeSubscriptionPeriod.ts`; checkout reference, customer type and seats are decided server-side.
-- ESLint: `antfu/reasonable-newline` (#47) and antfu's pnpm rules (#48) are off on purpose.
+- ESLint: `antfu/reasonable-newline` is off on purpose (#47). antfu's pnpm rules are on: they enforce
+  `trustPolicy: no-downgrade`, `shellEmulator` and `minimumReleaseAgeExcludePrune` in `pnpm-workspace.yaml`.
+- `ERR_PNPM_TRUST_DOWNGRADE` on install: first update the lockfile to a newer release of that package
+  that carries provenance (`npm view <pkg>@<v> dist.attestations`). Last resort, once the release is
+  checked legitimate (npm page, GitHub release and tag): add its exact `name@version` (never a bare
+  name) to `trustPolicyExclude` with a comment.
 - Conventional Commits (commitlint `commit-msg` hook; PR title and commits in CI) and a Keep a
   Changelog entry under `[Unreleased]` for user-visible changes: `CONTRIBUTING.md`.
 - GitHub Actions are pinned to a commit SHA with the exact version as an end-of-line comment

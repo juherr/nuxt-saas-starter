@@ -673,7 +673,8 @@ export const createBetterAuth = () => betterAuth({
         path: ctx.path,
         hasSession: !!(ctx.context.session || ctx.context.newSession),
         sessionUserId: ctx.context.session?.user.id || ctx.context.newSession?.user.id,
-        email: ctx.body?.email
+        email: ctx.body?.email,
+        bodyUserId: ctx.body?.userId
       })
       const returned = ctx.context.returned
       if (returned && returned instanceof APIError) {

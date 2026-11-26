@@ -7,7 +7,7 @@
  */
 import { useClipboard } from '@vueuse/core'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
-import { isAdminOrOwner, isOwner, parseOrgRoles, toggleOrgRole } from '~~/shared/utils/permissions'
+import { isAdminOrOwner, isOwner, parseRoles, toggleOrgRole } from '~~/shared/utils/permissions'
 
 definePageMeta({
   layout: 'dashboard'
@@ -190,7 +190,7 @@ const roles = [
 
 // A member may hold several roles, stored as one comma-separated value.
 function roleMenuItems(member: { id: string, role: string }) {
-  const held = parseOrgRoles(member.role)
+  const held = parseRoles(member.role)
   return roles.filter(r => r.value !== 'owner').map((r) => {
     const checked = held.includes(r.value)
     return {
@@ -204,7 +204,7 @@ function roleMenuItems(member: { id: string, role: string }) {
 }
 
 function roleLabels(role: string) {
-  return parseOrgRoles(role)
+  return parseRoles(role)
     .map(value => roles.find(r => r.value === value)?.label ?? value)
     .join(', ')
 }
@@ -274,7 +274,7 @@ function roleLabels(role: string) {
                 v-if="!canManageMembers || isOwner(member.role)"
                 :color="isOwner(member.role) ? 'primary' : 'neutral'"
               >
-                {{ member.role }}
+                {{ roleLabels(member.role) }}
               </UBadge>
 
               <!-- Role Dropdown -->

@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog, following Keep a Changelog. Commit messages follow Conventional Commits, checked
   by a commitlint `commit-msg` hook and, on pull requests, on the title and the commits.
   `CONTRIBUTING.md` and a pull request template describe both
+- Deleting a user as an admin writes an audit log entry naming the admin, the removed user and the
+  result, refused attempts included
+  ([#139](https://github.com/juherr/nuxt-saas-starter/pull/139))
 
 ### Changed
 
@@ -41,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copyright notice in `LICENSE` next to every other holder, and point funding and repository links
   (`NUXT_APP_REPO` default, site navigation) to this project
 - GitHub Actions are pinned to commit SHAs, with their version in a comment that Dependabot updates
+- Package scripts, including dependencies' build scripts, run in pnpm's built-in shell
+  (`shellEmulator`), so POSIX-style scripts behave the same on Windows
+  ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
+- The toolchain is installed with [mise](https://mise.jdx.dev): `mise.toml` pins Node and replaces
+  `.nvmrc`, which is removed: instead of `nvm use`, run `mise install`, then activate it with
+  `mise activate` in your shell or prefix commands with `mise exec --` (see the README); pnpm stays
+  pinned only by `packageManager` in `package.json`
+  ([#140](https://github.com/juherr/nuxt-saas-starter/pull/140))
 
 ### Removed
 
@@ -114,6 +125,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty. Set the bucket's public URL in `NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL` (S3), or in
   `NUXT_CF_R2_PUBLIC_URL` at build or `NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL` at runtime (R2)
   ([#141](https://github.com/juherr/nuxt-saas-starter/pull/141))
+- Role labels show each role of a list, joined, instead of the raw value: the admin users page
+  translates them (`User, Administrator` rather than the key `user.roles.user,admin`), the profile
+  page badge reads `User, Administrator` rather than `user,admin`, and the members page badge reads
+  `Owner, Admin` rather than `owner,admin`
+  ([#144](https://github.com/juherr/nuxt-saas-starter/pull/144))
+
+### Security
+
+- `pnpm install` fails with `ERR_PNPM_TRUST_DOWNGRADE` when a package version has a lower trust
+  level (provenance, trusted publisher) than versions published before it, which can reveal a
+  compromised publish. This also applies to `pnpm install --frozen-lockfile` on versions already
+  in the lockfile. On that error, update the lockfile to a newer release of the package that
+  carries provenance; as a last resort, once the release is checked as legitimate, list its exact
+  `name@version` under `trustPolicyExclude` in `pnpm-workspace.yaml`
+  ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
+- A refused organization switch, such as one opened from another site's link, no longer makes
+  the organization middleware redirect between organizations forever, which kept a server
+  worker busy during server rendering. It now returns to the active organization when the user
+  belongs to it, else shows the access-denied page
+  ([#153](https://github.com/juherr/nuxt-saas-starter/pull/153))
 
 ## [0.1.0] - 2026-11-18
 

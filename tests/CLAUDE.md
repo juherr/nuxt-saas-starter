@@ -14,5 +14,17 @@
   `server/utils/<name>` is `undefined` in those suites, so put a new shared helper in its own module.
 - Component tests: `mountSuspended` + `mockNuxtImport` from `@nuxt/test-utils/runtime`; SFCs with an
   `<i18n>` block need `mockNuxtImport('useI18n', () => () => ({ t: key => key }))`.
-- e2e: `setup({ host: process.env.NUXT_TEST_APP_URL })` + `createPage`; sign-in tests need an existing
-  user in `NUXT_TEST_EMAIL` / `NUXT_TEST_PASSWORD`.
+- e2e: `setup({ host: process.env.NUXT_TEST_APP_URL })` + `createPage`, run by the CI job `e2e`. Two
+  users must exist: an admin (`NUXT_ADMIN_EMAIL` / `PASSWORD`, `node create-admin.ts`) and a regular
+  user with a verified email (`NUXT_TEST_EMAIL` / `PASSWORD`, `.github/scripts/e2e-seed-user.sh`:
+  sign-up, then `email_verified = true`). That script expects a fresh database in a Postgres container
+  (`POSTGRES_CONTAINER`, run through `docker exec`) and fails if the user already exists. The pages
+  render `global.appName` (`app/i18n/global.json`), and the tests look for it through
+  `NUXT_APP_NAME`: export `NUXT_APP_NAME='House of BetterAuth'` in the shell that runs vitest (the
+  build reads it only for a meta tag). Locally: build and start the app as the job does, install the
+  browser (`pnpm exec playwright-core install --only-shell chromium`), then
+  `pnpm exec vitest run --project e2e`. A failed test leaves a screenshot of each page still open in
+  `test-results/e2e/` (`tests/e2e/setup.ts`, which patches `chromium.launch`; the unit test
+  `e2eScreenshotPatch.test.ts` fails if `@nuxt/test-utils` launches another copy of playwright-core).
+  To check the screenshots by hand, run the suite with a wrong `NUXT_APP_NAME`: the tests that look
+  for the title fail and leave PNGs there.

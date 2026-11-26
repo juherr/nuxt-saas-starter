@@ -20,7 +20,15 @@ const { setRole, rowState } = vi.hoisted(() => ({
   rowState: { original: { id: 'user-2', role: 'user,admin' } }
 }))
 
-mockNuxtImport('useI18n', () => () => ({ t: (key: string) => key }))
+// A small dictionary, so a test can tell a translated role from a raw key.
+const messages: Record<string, string> = {
+  'user.roles.user': 'User',
+  'user.roles.admin': 'Administrator'
+}
+mockNuxtImport('useI18n', () => () => ({
+  t: (key: string) => messages[key] ?? key,
+  te: (key: string) => key in messages
+}))
 mockNuxtImport('useAdminTable', () => () => ({ refresh: vi.fn() }))
 mockNuxtImport('useAuth', () => () => ({
   client: { admin: { setRole } },
@@ -39,7 +47,8 @@ const LayoutStub = defineComponent({
   }
 })
 
-async function mountRoleMenu(role: string) {
+// The role cell holds the only dropdown whose items are checkboxes.
+async function mountRoleMenuComponent(role: string) {
   rowState.original = { id: 'user-2', role }
   const wrapper = await mountSuspended(AdminUsersPage, {
     global: {
@@ -55,6 +64,11 @@ async function mountRoleMenu(role: string) {
     .find(m => (m.props('items') as { type?: string }[]).some(item => item.type === 'checkbox'))
   if (!menu)
     throw new Error('role menu not rendered')
+  return menu
+}
+
+async function mountRoleMenu(role: string) {
+  const menu = await mountRoleMenuComponent(role)
   const items = menu.props('items') as RoleMenuItem[]
   return (label: string) => {
     const found = items.find(i => i.label === label)
@@ -73,7 +87,7 @@ describe('admin users page role menu', () => {
   it('removes only the unchecked role from the list', async () => {
     const item = await mountRoleMenu('user,admin')
 
-    await item('user.roles.admin').onUpdateChecked(false)
+    await item('Administrator').onUpdateChecked(false)
 
     expect(setRole).toHaveBeenCalledWith({ userId: 'user-2', role: ['user'] })
     expect(rowState.original.role).toBe('user')
@@ -82,7 +96,7 @@ describe('admin users page role menu', () => {
   it('adds a checked role to the list', async () => {
     const item = await mountRoleMenu('user')
 
-    await item('user.roles.admin').onUpdateChecked(true)
+    await item('Administrator').onUpdateChecked(true)
 
     expect(setRole).toHaveBeenCalledWith({ userId: 'user-2', role: ['user', 'admin'] })
     expect(rowState.original.role).toBe('user,admin')
@@ -91,8 +105,27 @@ describe('admin users page role menu', () => {
   it('refuses to uncheck the only role', async () => {
     const item = await mountRoleMenu('user')
 
-    await item('user.roles.user').onUpdateChecked(false)
+    await item('User').onUpdateChecked(false)
 
     expect(setRole).not.toHaveBeenCalled()
+  })
+})
+
+describe('admin users page role badge', () => {
+  async function roleLabel(role: string) {
+    const menu = await mountRoleMenuComponent(role)
+    return menu.findComponent({ name: 'UButton' }).text()
+  }
+
+  it('translates each role of a list and joins them', async () => {
+    expect(await roleLabel('user,admin')).toBe('User, Administrator')
+  })
+
+  it('shows an unknown role of a list as its raw value', async () => {
+    expect(await roleLabel('user,superuser')).toBe('User, superuser')
+  })
+
+  it('shows an empty label for an empty role', async () => {
+    expect(await roleLabel('')).toBe('')
   })
 })

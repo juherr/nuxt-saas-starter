@@ -23,7 +23,6 @@ path = [
   "**/*.json",
   "**/*.md",
   "**/*.webmanifest",
-  ".nvmrc",
   ".nuxtrc",
   "pnpm-lock.yaml",
   "server/db/schema/auth.ts",

@@ -2,15 +2,23 @@
 <i18n src="./i18n.json"></i18n>
 
 <script setup lang="ts">
-import { hasRole, parseOrgRoles, toggleOrgRole } from '~~/shared/utils/permissions'
+import { hasRole, isSystemAdmin, parseRoles, toggleOrgRole } from '~~/shared/utils/permissions'
 import BanUserModal from './components/BanUserModal.vue'
 import CreateUserModal from './components/CreateUserModal.vue'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { client, user: currentUser } = useAuth()
 const isUserModalOpen = ref(false)
 const isBanModalOpen = ref(false)
 const selectedUserId = ref('')
+
+// A user may hold several roles, stored as one comma-separated value: each
+// is translated, an unknown one shown as is rather than as a raw i18n key.
+function roleLabels(role: string | null | undefined) {
+  return parseRoles(role)
+    .map(value => te(`user.roles.${value}`) ? t(`user.roles.${value}`) : value)
+    .join(', ')
+}
 
 const filters: AdminTableFilter[] = reactive([
   {
@@ -110,7 +118,7 @@ const getRoleDropdownItems = (original: User) => {
       type: 'checkbox' as const,
       checked: hasRole(original.role, role),
       onUpdateChecked: async (checked: boolean) => {
-        const next = toggleOrgRole(parseOrgRoles(original.role), role, checked)
+        const next = toggleOrgRole(parseRoles(original.role), role, checked)
         // A user keeps at least one role: the last one cannot be unchecked.
         if (next.length === 0)
           return
@@ -233,13 +241,13 @@ const fetchData: FetchDataFn<User> = async ({ page, limit, sort, filter }) => {
           arrow
         >
           <UButton
-            :color="hasRole(original.role, 'admin') ? 'primary' : 'neutral'"
+            :color="isSystemAdmin(original.role) ? 'primary' : 'neutral'"
             variant="outline"
             size="xs"
             icon="i-lucide-chevron-down"
             trailing
           >
-            {{ t(`user.roles.${original.role}`) }}
+            {{ roleLabels(original.role) }}
           </UButton>
         </UDropdownMenu>
       </template>

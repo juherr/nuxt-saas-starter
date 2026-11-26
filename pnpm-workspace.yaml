@@ -2,6 +2,27 @@
 # pnpm settings. Since pnpm 11, the `pnpm` field of package.json is no
 # longer read and .npmrc only carries auth and registry settings.
 # https://github.com/pnpm/pnpm/releases/tag/v11.0.0
+#
+# trustPolicy, shellEmulator and minimumReleaseAgeExcludePrune are the
+# settings @antfu/eslint-config's pnpm rules enforce, adopted in #48.
+# Docs: https://pnpm.io/settings/dependency-resolution (shellEmulator
+# under /settings/other).
+
+# Drop minimumReleaseAgeExclude entries the lockfile no longer resolves.
+# A no-op while that list is empty; keeps it tidy later.
+minimumReleaseAgeExcludePrune: true
+# Fail the install when a package's trust level (provenance, trusted
+# publisher) drops compared to an earlier release, a sign of a
+# compromised publish. pnpm compares releases by publish date.
+# On ERR_PNPM_TRUST_DOWNGRADE, first update the lockfile to a newer
+# release that carries provenance. Only as a last resort, once the
+# release is checked as legitimate (npm page, GitHub release and tag),
+# list its exact `name@version` (never a bare name) under
+# trustPolicyExclude with a comment.
+trustPolicy: no-downgrade
+# Run scripts (ours and dependencies' build scripts) in pnpm's built-in
+# bash-like shell, so POSIX-style scripts also work on Windows.
+shellEmulator: true
 
 # Dependencies whose install scripts may run. pnpm fails the install
 # on any dependency with a build script that is not listed here.

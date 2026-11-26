@@ -2,11 +2,19 @@
 <i18n src="./i18n.json"></i18n>
 
 <script setup lang="ts">
-import { hasRole } from '~~/shared/utils/permissions'
+import { isSystemAdmin, parseRoles } from '~~/shared/utils/permissions'
 
 const { user, session, client } = useAuth()
 const toast = useToast()
-const { t } = useI18n()
+const { t, te } = useI18n()
+
+// A user may hold several roles, stored as one comma-separated value: each
+// is translated, an unknown one shown as is rather than as a raw i18n key.
+function roleLabels(role: string | null | undefined) {
+  return parseRoles(role)
+    .map(value => te(`profile.roles.${value}`) ? t(`profile.roles.${value}`) : value)
+    .join(', ')
+}
 const localePath = useLocalePath()
 const { data: accounts } = await useAsyncData('/accounts', () => client.listAccounts())
 
@@ -61,8 +69,11 @@ onMounted(() => {
           <div class="space-y-2">
             <p class="flex justify-between">
               <span class="text-neutral-500 dark:text-neutral-400">{{ t('profile.role') }}:</span>
-              <UBadge :color="hasRole(user?.role, 'admin') ? 'primary' : 'neutral'">
-                {{ user?.role }}
+              <UBadge
+                data-testid="profile-role"
+                :color="isSystemAdmin(user?.role) ? 'primary' : 'neutral'"
+              >
+                {{ roleLabels(user?.role) }}
               </UBadge>
             </p>
             <p class="flex justify-between">

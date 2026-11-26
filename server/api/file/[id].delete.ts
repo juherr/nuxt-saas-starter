@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { createFileService } from '~~/server/services/file/fileService'
-import { hasRole } from '~~/shared/utils/permissions'
+import { isSystemAdmin } from '~~/shared/utils/permissions'
 
 const fileNotFound = () => createError({ statusCode: 404, statusMessage: 'File not found' })
 
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   const file = await fileService.getFile(fileId)
 
-  if (!file || (file.uploadedBy !== user.id && !hasRole(user.role, 'admin'))) {
+  if (!file || (file.uploadedBy !== user.id && !isSystemAdmin(user.role))) {
     throw fileNotFound()
   }
 

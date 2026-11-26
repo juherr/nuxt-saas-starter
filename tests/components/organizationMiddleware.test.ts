@@ -148,6 +148,32 @@ describe('the organization middleware', () => {
 
     const visited = await navigate(useLocalePath()('/unknown/dashboard'))
 
-    expect(visited[1]).toBe(dashboard(A))
+    expect(visited).toEqual([useLocalePath()('/unknown/dashboard'), dashboard(A)])
+    expect(auth.setActive).toHaveBeenCalledTimes(1)
+  })
+
+  it('ends at the forbidden page when an unknown slug leads to a refused set-active', async () => {
+    auth.setActiveError = { message: 'refused' }
+    auth.activeOrganizationId = 'C'
+
+    const visited = await navigate(useLocalePath()('/unknown/dashboard'))
+
+    expect(visited).toEqual([useLocalePath()('/unknown/dashboard'), dashboard(A), useLocalePath()('/403')])
+    expect(auth.setActive).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the locale prefix on the forbidden page', async () => {
+    auth.setActiveError = { message: 'refused' }
+    const i18n = useNuxtApp().$i18n
+    await i18n.setLocale('fr')
+    try {
+      const visited = await navigate('/fr/org-a/dashboard')
+
+      expect(visited).toEqual(['/fr/org-a/dashboard', '/fr/403'])
+      expect(auth.setActive).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      await i18n.setLocale('en')
+    }
   })
 })

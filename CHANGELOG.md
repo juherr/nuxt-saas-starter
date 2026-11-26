@@ -87,6 +87,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resending the verification email no longer claims an email was sent when delivery failed: the
   sign-in page shows a neutral message, and the server logs the failure as an error
   ([#128](https://github.com/juherr/nuxt-saas-starter/pull/128))
+- The French, Japanese and Chinese pages translate the dashboard link and the home page features
+  instead of showing raw message keys, and a key missing from a locale now falls back to English
+  ([#129](https://github.com/juherr/nuxt-saas-starter/pull/129))
 
 ## [0.1.0] - 2026-11-18
 

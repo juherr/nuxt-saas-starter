@@ -99,10 +99,16 @@ async function uploadAvatar(event: Event) {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await $fetch<{ file: { url: string } }>('/api/file/upload', {
+    const response = await $fetch<{ file: { url?: string | null } }>('/api/file/upload', {
       method: 'POST',
       body: formData
     })
+
+    // A stored file without a URL would leave the avatar empty.
+    if (!response.file.url) {
+      toast.add({ title: t('profile.toast.avatarNoUrl'), color: 'error' })
+      return
+    }
 
     // Update user image
     await client.updateUser({ image: response.file.url })

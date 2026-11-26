@@ -23,8 +23,29 @@ export const assertStorageKey = (key: string): string => {
   return key
 }
 
+// Runtime variable that sets each provider's public URL
+const PUBLIC_URL_VARIABLES = {
+  s3: 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL',
+  r2: 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'
+} as const
+
+/**
+ * `value` trimmed when it is an absolute http(s) URL a browser can load and
+ * a file path can be appended to, otherwise undefined.
+ */
+const browserUrl = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  // A query or fragment, even empty, would swallow the appended path.
+  if (!trimmed || /[?#]/.test(trimmed) || !URL.canParse(trimmed)) {
+    return undefined
+  }
+  const { protocol } = new URL(trimmed)
+  return protocol === 'https:' || protocol === 'http:' ? trimmed : undefined
+}
+
 export class S3CompatibleStorageProvider implements StorageProvider {
   name = ''
+  readonly missingPublicUrlVariable: string | undefined
   private client: AwsClient | null = null
   private bucketName: string
   private publicUrl?: string
@@ -44,8 +65,13 @@ export class S3CompatibleStorageProvider implements StorageProvider {
   }) {
     this.provider = config.provider
     this.bucketName = config.bucketName
-    this.publicUrl = config.publicUrl
+    // A blank or malformed URL counts as none: it would yield broken file URLs.
+    this.publicUrl = browserUrl(config.publicUrl)
     this.config = config
+    // The bucket hostname getUrl() falls back to is not public by default.
+    this.missingPublicUrlVariable = this.publicUrl
+      ? undefined
+      : PUBLIC_URL_VARIABLES[config.provider]
     if (this.provider === 'r2') {
       this.name = 's3-r2'
     } else if (this.provider === 's3') {

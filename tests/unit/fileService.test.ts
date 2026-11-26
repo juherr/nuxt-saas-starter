@@ -12,19 +12,20 @@ vi.mock('~~/server/utils/auditLogger', () => ({ logAuditEvent: vi.fn() }))
 
 const insertedValues = vi.fn()
 const deletedRows = vi.fn()
+const useDB = vi.fn(async () => ({
+  insert: () => ({
+    values: (values: Record<string, unknown>) => {
+      insertedValues(values)
+      return { returning: async () => [values] }
+    }
+  }),
+  delete: () => ({ where: async (condition: unknown) => deletedRows(condition) })
+}))
 
 beforeAll(() => {
   stubNitroGlobals()
   vi.stubGlobal('formatFileSize', (bytes: number) => `${bytes} B`)
-  vi.stubGlobal('useDB', async () => ({
-    insert: () => ({
-      values: (values: Record<string, unknown>) => {
-        insertedValues(values)
-        return { returning: async () => [values] }
-      }
-    }),
-    delete: () => ({ where: async (condition: unknown) => deletedRows(condition) })
-  }))
+  vi.stubGlobal('useDB', useDB)
 })
 afterAll(() => {
   vi.unstubAllGlobals()
@@ -33,10 +34,11 @@ afterAll(() => {
 const PNG = { mimeType: 'image/png', extension: 'png' }
 const STORAGE_NAME = /^\d{4}-\d{2}-\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/
 
-function storage() {
+function storage(missingPublicUrlVariable?: string) {
   const upload = vi.fn<StorageProvider['upload']>(async (_file, name) => ({ path: name, url: `/uploads/${name}` }))
   const provider: StorageProvider = {
     name: 'test',
+    missingPublicUrlVariable,
     upload: async (file, name, type) => upload(file, name, type),
     delete: vi.fn(),
     getUrl: name => `/uploads/${name}`,
@@ -48,6 +50,30 @@ function storage() {
 describe('fileService.uploadFile', () => {
   beforeEach(() => {
     insertedValues.mockReset()
+    useDB.mockClear()
+    vi.mocked(logAuditEvent).mockReset()
+  })
+
+  it('refuses with 503 naming the variable before storing when the storage has no public URL', async () => {
+    const { provider, upload } = storage('NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL')
+
+    const error = await new FileService(provider).uploadFile(Buffer.from('data'), 'a.png', PNG, 'u1').catch((e: unknown) => e)
+
+    expect(error).toMatchObject({ statusCode: 503 })
+    expect((error as Error).message).toContain('NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL')
+    expect(upload).not.toHaveBeenCalled()
+    expect(useDB).not.toHaveBeenCalled()
+    expect(insertedValues).not.toHaveBeenCalled()
+    expect(logAuditEvent).not.toHaveBeenCalled()
+  })
+
+  it('stores the file and keeps its URL when the storage has a public URL', async () => {
+    const { provider, upload } = storage()
+
+    await new FileService(provider).uploadFile(Buffer.from('data'), 'a.png', PNG, 'u1')
+
+    const storedName = upload.mock.calls[0]![1]
+    expect(insertedValues).toHaveBeenCalledWith(expect.objectContaining({ url: `/uploads/${storedName}` }))
   })
 
   it.each([

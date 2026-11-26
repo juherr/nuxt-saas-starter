@@ -119,6 +119,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sessions and rate-limit counters, recommends Redis in production, and gives a cron-able `find`
   command that clears them from `.data/kv`
   ([#134](https://github.com/juherr/nuxt-saas-starter/pull/134))
+- **Breaking:** S3 or R2 storage without a valid public URL (unset, blank, not an absolute
+  `http(s)://` URL, or carrying a query string or fragment) now refuses every upload with a 503 that
+  names the variable to set, instead of storing a file with no URL and leaving the uploaded avatar
+  empty. Set the bucket's public URL in `NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL` (S3), or in
+  `NUXT_CF_R2_PUBLIC_URL` at build or `NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL` at runtime (R2)
+  ([#141](https://github.com/juherr/nuxt-saas-starter/pull/141))
 - Role labels show each role of a list, joined, instead of the raw value: the admin users page
   translates them (`User, Administrator` rather than the key `user.roles.user,admin`), the profile
   page badge reads `User, Administrator` rather than `user,admin`, and the members page badge reads

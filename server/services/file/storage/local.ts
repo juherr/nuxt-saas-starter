@@ -60,6 +60,8 @@ export const resolveRealInside = async (directory: string, path: string): Promis
 
 export class LocalStorageProvider implements StorageProvider {
   name = 'local'
+  // Served by the app itself under its public path.
+  readonly missingPublicUrlVariable = undefined
   private uploadDir: string
   private publicPath: string
 

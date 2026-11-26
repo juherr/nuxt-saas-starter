@@ -3,6 +3,11 @@ import type { Buffer } from 'node:buffer'
 
 export interface StorageProvider {
   name: string
+  /**
+   * The configuration variable to set before stored files get a URL a
+   * browser can load; undefined when they already do.
+   */
+  readonly missingPublicUrlVariable: string | undefined
   upload: (file: Buffer, fileName: string, mimeType: string) => Promise<{ path: string, url?: string }>
   delete: (path: string) => Promise<void>
   getUrl: (path: string) => string

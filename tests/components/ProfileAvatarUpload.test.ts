@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mockNuxtImport, mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime'
+import { flushPromises } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import messages from '~/pages/[slug]/profile.i18n.json'
 import ProfilePage from '~/pages/[slug]/profile.vue'
@@ -27,11 +28,15 @@ function translate(key: string) {
   return typeof node === 'string' ? node : key
 }
 
+const updateUser = vi.hoisted(() => vi.fn(async () => ({ data: null })))
+const toastAdd = vi.hoisted(() => vi.fn())
+
 mockNuxtImport('useI18n', () => () => ({ t: translate }))
+mockNuxtImport('useToast', () => () => ({ add: toastAdd }))
 mockNuxtImport('useAuth', () => () => ({
   user: ref({ id: 'user-1', name: 'Ada', email: 'ada@example.test', image: null }),
   useActiveOrganization: () => ref(null),
-  client: { listAccounts: vi.fn(async () => ({ data: [] })) },
+  client: { listAccounts: vi.fn(async () => ({ data: [] })), updateUser },
   fetchSession: vi.fn()
 }))
 
@@ -70,5 +75,41 @@ describe('profile avatar upload', () => {
     expect(page.text()).toContain(messages.fr.profile.avatar.upload)
     expect(page.text()).toContain(messages.fr.profile.title)
     expect(page.text()).not.toContain('Upload Photo')
+  })
+})
+
+describe('profile avatar upload response', () => {
+  beforeEach(() => {
+    updateUser.mockClear()
+    toastAdd.mockReset()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  async function chooseAvatar(response: unknown) {
+    registerEndpoint('/api/file/upload', { method: 'POST', handler: () => response, once: true })
+    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {})
+    const page = await mount()
+    const input = page.find('input[type="file"]')
+    const file = new File(['png'], 'avatar.png', { type: 'image/png' })
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+    return { reload }
+  }
+
+  it('keeps the profile picture and says why when the stored file has no URL', async () => {
+    const { reload } = await chooseAvatar({ success: true, file: { id: 'f1', url: null } })
+
+    expect(updateUser).not.toHaveBeenCalled()
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'profile.toast.avatarNoUrl', color: 'error' }))
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('sets the stored file URL as the profile picture', async () => {
+    await chooseAvatar({ success: true, file: { id: 'f1', url: 'https://cdn.example.test/a.png' } })
+
+    expect(updateUser).toHaveBeenCalledWith({ image: 'https://cdn.example.test/a.png' })
   })
 })

@@ -274,7 +274,7 @@ function roleLabels(role: string) {
                 v-if="!canManageMembers || isOwner(member.role)"
                 :color="isOwner(member.role) ? 'primary' : 'neutral'"
               >
-                {{ member.role }}
+                {{ roleLabels(member.role) }}
               </UBadge>
 
               <!-- Role Dropdown -->

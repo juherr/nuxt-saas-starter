@@ -6,7 +6,15 @@ import { hasRole, isSystemAdmin, parseRoles, toggleOrgRole } from '~~/shared/uti
 import BanUserModal from './components/BanUserModal.vue'
 import CreateUserModal from './components/CreateUserModal.vue'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
+
+// A user may hold several roles, stored as one comma-separated value: each
+// is translated, an unknown one shown as is rather than as a raw i18n key.
+function roleLabels(role: string | null | undefined) {
+  return parseRoles(role)
+    .map(value => te(`user.roles.${value}`) ? t(`user.roles.${value}`) : value)
+    .join(', ')
+}
 const { client, user: currentUser } = useAuth()
 const isUserModalOpen = ref(false)
 const isBanModalOpen = ref(false)
@@ -239,7 +247,7 @@ const fetchData: FetchDataFn<User> = async ({ page, limit, sort, filter }) => {
             icon="i-lucide-chevron-down"
             trailing
           >
-            {{ t(`user.roles.${original.role}`) }}
+            {{ roleLabels(original.role) }}
           </UButton>
         </UDropdownMenu>
       </template>

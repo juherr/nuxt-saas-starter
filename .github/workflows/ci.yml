@@ -147,7 +147,9 @@ jobs:
             sign-in-body.txt
 
   # Builds and starts the Node server against throwaway PostgreSQL and Redis
-  # services, then checks the health endpoint and an email sign-in.
+  # services, then checks the health endpoint, an email sign-in and an
+  # authenticated SSR page under /<org-slug>/ (organization switch,
+  # typed URL, foreign Host).
   smoke-node:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -186,6 +188,10 @@ jobs:
         run: node create-admin.ts
       - name: Sign in with email and password
         run: .github/scripts/smoke-sign-in.sh sign-in "$NUXT_ADMIN_EMAIL" "$NUXT_ADMIN_PASSWORD"
+      # Uses the admin session, so it runs before the reset below. The
+      # name is the one create-admin.ts gives the user.
+      - name: Render an organization page server-side
+        run: .github/scripts/smoke-ssr-page.sh sign-in 'Admin User'
       # A second reset proves it is idempotent over a seeded database. It
       # wipes smoke-admin too, hence after the admin sign-in.
       - name: Reset the database to the demo seed again
@@ -203,5 +209,9 @@ jobs:
             server.log
             sign-in-headers.txt
             sign-in-body.txt
+            ssr-org-*.json
+            ssr-*-headers.txt
+            ssr-*-body.txt
+            foreign-host.log
             demo-sign-in-headers.txt
             demo-sign-in-body.txt

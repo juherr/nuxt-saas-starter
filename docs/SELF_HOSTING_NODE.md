@@ -5,7 +5,7 @@ outside Cloudflare Workers. For Workers, see [NUXTHUB_SELF_HOSTED.md](NUXTHUB_SE
 
 You need:
 
-- Node.js 26 or later (`.nvmrc`) and pnpm (the version pinned in `packageManager` of `package.json`)
+- Node.js 26 or later (`mise.toml`) and pnpm (the version pinned in `packageManager` of `package.json`)
 - a PostgreSQL database
 - a writable, persistent directory for sessions (see [Sessions and KV](#2-sessions-and-kv)), or a Redis server
 

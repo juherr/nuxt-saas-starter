@@ -72,6 +72,15 @@ A production-ready Nuxt SaaS starter with authentication, billing, teams, and mo
 
 ## Quick Start
 
+The toolchain is installed with [mise](https://mise.jdx.dev): `mise.toml` pins Node, and pnpm is
+pinned only by `packageManager` in `package.json`, run through Corepack.
+
+```bash
+mise install                             # Node from mise.toml
+mise exec -- npm install -g corepack     # once: Node 26 ships no Corepack
+mise exec -- corepack enable             # `pnpm` now runs the packageManager version
+```
+
 ```bash
 cp .env.example .env   # Fill in env vars (database, Stripe, auth, etc.)
 pnpm install

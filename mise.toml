@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Single source of truth for the Node version (local, CI and docs).
+# pnpm is NOT pinned here: its single pin is `packageManager` in
+# package.json, run through Corepack (Node 26 ships no Corepack, install
+# it once with `mise exec -- npm install -g corepack`).
+[tools]
+node = "26"

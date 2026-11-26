@@ -10,9 +10,7 @@ const { user, organization, fetchSession } = useAuth()
 const toast = useToast()
 
 const { data: invitations } = await useAsyncData('user-invitations', async () => {
-  return await $fetch('/api/auth/user/invitations', {
-    headers: useSsrCookieHeaders()
-  })
+  return await $fetch('/api/auth/user/invitations', useSsrFetchHooks())
 })
 
 const newTeamName = ref('')
@@ -29,8 +27,7 @@ const checkSlug = useDebounceFn(async (slug: string) => {
   isCheckingSlug.value = true
   try {
     const { available } = await $fetch('/api/organization/check-slug', {
-      query: { slug },
-      headers: useSsrCookieHeaders()
+      query: { slug }
     })
     if (!available) {
       slugError.value = 'Slug is already taken'

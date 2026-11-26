@@ -6,7 +6,7 @@ import { adminClient, inferAdditionalFields, organizationClient } from 'better-a
 import { createAuthClient } from 'better-auth/vue'
 import { ac, admin, member, owner } from '~~/shared/utils/permissions'
 import { authClientTransport, configuredOrigin, SSR_REQUEST_HEADERS } from '~/utils/authClientTransport'
-import { applySsrCookie, ssrCookiePort } from '~/utils/ssrCookies'
+import { ssrCookiePort, ssrFetchHooks } from '~/utils/ssrCookies'
 
 export function useAuth() {
   const url = useRequestURL()
@@ -87,9 +87,7 @@ export function useAuth() {
       headers: import.meta.server ? useRequestHeaders() : undefined,
       key: 'auth-session',
       retry: 0,
-      onRequest: event
-        ? ({ options }) => applySsrCookie(event, options.headers)
-        : undefined
+      ...ssrFetchHooks(event)
     })
 
     const data = sessionData.value

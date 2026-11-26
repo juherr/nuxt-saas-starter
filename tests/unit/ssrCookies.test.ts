@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it } from 'vitest'
-import { applySsrCookie, captureSetCookies, ssrCookieHeader, ssrCookieHeaders, ssrCookiePort } from '~~/app/utils/ssrCookies'
+import { applySsrCookie, captureSetCookies, ssrCookieHeader, ssrCookiePort, ssrFetchHooks } from '~~/app/utils/ssrCookies'
 import { fakeEvent, responseWith } from './support/ssrCookieEvent'
 
 const FUTURE = 'Wed, 21 Oct 2037 07:28:00 GMT'
@@ -177,23 +177,6 @@ describe('ssrCookies', () => {
     })
   })
 
-  describe('ssrCookieHeaders', () => {
-    it('returns no header without an event, like useRequestHeaders in the browser', () => {
-      expect(ssrCookieHeaders(undefined)).toEqual({})
-    })
-
-    it('returns no header when the merged cookie is empty', () => {
-      expect(ssrCookieHeaders(fakeEvent().event)).toEqual({})
-    })
-
-    it('returns the merged cookie under a lowercase key', () => {
-      const { event } = fakeEvent('a=1')
-      captureSetCookies(event, responseWith('b=2'))
-
-      expect(ssrCookieHeaders(event)).toEqual({ cookie: 'a=1; b=2' })
-    })
-  })
-
   describe('ssrCookiePort', () => {
     it('is undefined without an event', () => {
       expect(ssrCookiePort(undefined)).toBeUndefined()
@@ -207,6 +190,40 @@ describe('ssrCookies', () => {
       port.capture(responseWith('a=2'))
       expect(port.header()).toBe('a=2')
       expect(setCookies()).toEqual(['a=2'])
+    })
+  })
+
+  describe('ssrFetchHooks', () => {
+    it('gives no hook without an event, so browser calls are left alone', () => {
+      expect(ssrFetchHooks(undefined)).toEqual({})
+    })
+
+    it('forwards the Set-Cookie of the response to the browser response', () => {
+      const { event, setCookies } = fakeEvent('better-auth.session_token=t')
+      const { onResponse } = ssrFetchHooks(event)
+
+      onResponse?.({ response: responseWith('better-auth.session_data=fresh; Path=/; HttpOnly') })
+
+      expect(setCookies()).toEqual(['better-auth.session_data=fresh; Path=/; HttpOnly'])
+    })
+
+    it('sends the cookie captured by an earlier call of the same render', () => {
+      const { event } = fakeEvent('better-auth.session_token=t; better-auth.session_data=stale')
+      ssrFetchHooks(event).onResponse?.({ response: responseWith('better-auth.session_data=fresh; Path=/') })
+      const headers = new Headers()
+
+      ssrFetchHooks(event).onRequest?.({ options: { headers } })
+
+      expect(headers.get('cookie')).toBe('better-auth.session_token=t; better-auth.session_data=fresh')
+    })
+
+    it('sends the inbound cookie when nothing was captured', () => {
+      const { event } = fakeEvent('a=1')
+      const headers = new Headers()
+
+      ssrFetchHooks(event).onRequest?.({ options: { headers } })
+
+      expect(headers.get('cookie')).toBe('a=1')
     })
   })
 })

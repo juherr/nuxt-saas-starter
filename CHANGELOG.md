@@ -81,6 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Billing previews show the real next billing date: the trial end while trialing, and the current
   period end for a seat change on a yearly plan instead of a date a year from now
   ([#130](https://github.com/juherr/nuxt-saas-starter/pull/130))
+- Cookies refreshed while a page renders on the server, such as the session cache set by
+  `get-session`, now reach the browser and the later requests of the same render
+  ([#131](https://github.com/juherr/nuxt-saas-starter/pull/131))
 
 ## [0.1.0] - 2026-11-18
 

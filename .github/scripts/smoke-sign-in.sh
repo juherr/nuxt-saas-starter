@@ -23,7 +23,7 @@ password=$3
 body=$(jq -nc --arg email "$email" --arg password "$password" \
   '{email: $email, password: $password}')
 
-status=$(curl -sS -o "$label-body.txt" -D "$label-headers.txt" \
+status=$(curl -sS --max-time 30 -o "$label-body.txt" -D "$label-headers.txt" \
   -c "$label-cookies.txt" -w '%{http_code}' \
   -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
   -H 'Content-Type: application/json' \

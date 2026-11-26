@@ -8,10 +8,9 @@
  * and the calls that follow in the same render must send the new value instead of the inbound
  * one. The jar is keyed on the request event, so it never outlives the request.
  *
- * Only responses that pass through the auth client transport are captured. The `Set-Cookie` of
- * `useFetch('/api/auth/get-session')` in `fetchSession`, and of the `$fetch` calls of the
- * dashboard layout and the onboarding page, are not: those calls read the jar but never feed it
- * (behaviour that predates the jar).
+ * Responses are captured by the auth client transport and by `ssrFetchHooks`, which the SSR
+ * calls to the app's own API use (`fetchSession`'s `get-session`, the `$fetch` calls of the
+ * dashboard layout and the onboarding page).
  *
  * Nothing here imports `h3` at run time: this file also ships in the client bundle, and the app
  * does not resolve `h3` itself.
@@ -210,7 +209,7 @@ export function ssrCookieHeader(event: SsrCookieEvent): string | undefined {
 
 /**
  * Puts the merged cookie on the headers of an outgoing SSR request, or removes the `cookie`
- * header when nothing is left. `fetchSession` calls it from its `onRequest` hook.
+ * header when nothing is left. The `onRequest` hook of `ssrFetchHooks` calls it.
  */
 export function applySsrCookie(event: SsrCookieEvent, headers: Headers): void {
   const cookie = ssrCookieHeader(event)
@@ -227,6 +226,27 @@ export function applySsrCookie(event: SsrCookieEvent, headers: Headers): void {
 export function ssrCookieHeaders(event: SsrCookieEvent | undefined): Record<string, string> {
   const cookie = event ? ssrCookieHeader(event) : undefined
   return cookie ? { cookie } : {}
+}
+
+/** The `$fetch`/`useFetch` hooks of an SSR call to the app's own API; an ofetch context satisfies them. */
+export interface SsrFetchHooks {
+  onRequest?: (context: { options: { headers: Headers } }) => void
+  onResponse?: (context: { response: Response }) => void
+}
+
+/**
+ * Hooks for an SSR `$fetch` or `useFetch` to the app's own API: the request leaves with the jar's
+ * cookie (read when it is sent), and the `Set-Cookie` of the response goes to the browser and into
+ * the jar for the calls that follow. Without an event (in the browser) there is no hook: the
+ * browser sends and stores its cookies itself.
+ */
+export function ssrFetchHooks(event: SsrCookieEvent | undefined): SsrFetchHooks {
+  if (!event)
+    return {}
+  return {
+    onRequest: ({ options }) => applySsrCookie(event, options.headers),
+    onResponse: ({ response }) => captureSetCookies(event, response)
+  }
 }
 
 /** The port the auth client transport uses during SSR; `undefined` without an event. */

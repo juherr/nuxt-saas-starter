@@ -40,9 +40,7 @@ const { data: layoutOrgData, refresh: _refreshLayoutOrg } = await useAsyncData(
     console.log('[Dashboard] Fetching fresh data from API...')
 
     // Otherwise (server side OR client navigation), fetch fresh data
-    return await $fetch('/api/organization/full-data', {
-      headers: useSsrCookieHeaders()
-    }).catch((e) => {
+    return await $fetch('/api/organization/full-data', useSsrFetchHooks()).catch((e) => {
       console.error('[Dashboard] Failed to fetch full data:', e)
       return null
     })
@@ -143,7 +141,7 @@ const _selectedInterval = ref<'month' | 'year'>('month')
 
 const fetchOwnedCount = async () => {
   try {
-    const { count } = await $fetch('/api/organization/get-owned-count', { headers: useSsrCookieHeaders() })
+    const { count } = await $fetch('/api/organization/get-owned-count', useSsrFetchHooks())
     ownedTeamsCount.value = count
   } catch (e) {
     console.error('Failed to fetch owned teams count', e)

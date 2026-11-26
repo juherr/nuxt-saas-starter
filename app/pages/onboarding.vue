@@ -10,9 +10,7 @@ const { user, organization, fetchSession } = useAuth()
 const toast = useToast()
 
 const { data: invitations } = await useAsyncData('user-invitations', async () => {
-  return await $fetch('/api/auth/user/invitations', {
-    headers: useSsrCookieHeaders()
-  })
+  return await $fetch('/api/auth/user/invitations', useSsrFetchHooks())
 })
 
 const newTeamName = ref('')

@@ -231,3 +231,15 @@ export function isOwner(role: string | null | undefined): boolean {
 export function isAdminOrOwner(role: string | null | undefined): boolean {
   return hasOrgRole(role, ['owner', 'admin'])
 }
+
+/**
+ * A member's role list with `role` added (`checked`) or removed, in a new
+ * array. Roles already held keep their place, an added role goes last, and
+ * roles outside the role menu stay. Unchecking the last role returns an
+ * empty list: the caller refuses to send it.
+ */
+export function toggleOrgRole(roles: readonly string[], role: string, checked: boolean): string[] {
+  if (!checked)
+    return roles.filter(entry => entry !== role)
+  return roles.includes(role) ? [...roles] : [...roles, role]
+}

@@ -7,7 +7,8 @@ import {
   hasPermission,
   isAdminOrOwner,
   isOwner,
-  parseOrgRoles
+  parseOrgRoles,
+  toggleOrgRole
 } from '~~/shared/utils/permissions'
 
 describe('parseOrgRoles', () => {
@@ -95,4 +96,23 @@ describe('isApiKeyManagerRole matches hasOrgRole', () => {
       expect(isApiKeyManagerRole(role)).toBe(hasOrgRole(role, ['owner', 'admin']))
     }
   )
+})
+
+describe('toggleOrgRole', () => {
+  it.each([
+    ['adds an unchecked role at the end', ['admin'], 'member', true, ['admin', 'member']],
+    ['keeps a role already held when checked', ['admin', 'member'], 'member', true, ['admin', 'member']],
+    ['removes an unchecked role', ['admin', 'member'], 'member', false, ['admin']],
+    ['keeps the list when unchecking a role not held', ['admin'], 'member', false, ['admin']],
+    ['keeps roles outside the menu', ['sale', 'member'], 'admin', true, ['sale', 'member', 'admin']],
+    ['returns an empty list when unchecking the last role', ['member'], 'member', false, []]
+  ])('%s', (_label, roles, role, checked, expected) => {
+    expect(toggleOrgRole(roles, role, checked)).toEqual(expected)
+  })
+
+  it('leaves the given list untouched', () => {
+    const roles = ['admin', 'member']
+    toggleOrgRole(roles, 'member', false)
+    expect(roles).toEqual(['admin', 'member'])
+  })
 })

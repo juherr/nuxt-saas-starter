@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin table filters naming an inherited key such as `toString` are ignored
   ([#95](https://github.com/juherr/nuxt-saas-starter/pull/95))
 - Switching the home page screenshot tabs no longer flashes an empty panel
+- The members page role menu shows every role a member holds and adds or removes one role at a
+  time instead of replacing the whole list; the last role cannot be removed
+  ([#132](https://github.com/juherr/nuxt-saas-starter/pull/132))
 
 ## [0.1.0] - 2026-11-18
 

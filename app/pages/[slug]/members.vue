@@ -7,7 +7,7 @@
  */
 import { useClipboard } from '@vueuse/core'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
-import { isAdminOrOwner, isOwner } from '~~/shared/utils/permissions'
+import { isAdminOrOwner, isOwner, parseOrgRoles, toggleOrgRole } from '~~/shared/utils/permissions'
 
 definePageMeta({
   layout: 'dashboard'
@@ -91,8 +91,11 @@ async function refreshPage() {
 // ─────────────────────────────────────────────
 // Member Management
 // ─────────────────────────────────────────────
-async function updateMemberRole(memberId: string, newRole: string) {
+async function updateMemberRole(memberId: string, newRoles: string[]) {
   if (!activeOrg.value?.data?.id)
+    return
+  // A member keeps at least one role: the last one cannot be unchecked.
+  if (newRoles.length === 0)
     return
   loading.value = true
 
@@ -100,7 +103,7 @@ async function updateMemberRole(memberId: string, newRole: string) {
     const { error } = await organization.updateMemberRole({
       organizationId: activeOrg.value.data.id,
       memberId,
-      role: newRole as 'admin' | 'member' | 'owner'
+      role: newRoles
     })
 
     if (error)
@@ -184,6 +187,27 @@ const roles = [
   { label: 'Admin', value: 'admin' },
   { label: 'Owner', value: 'owner' }
 ]
+
+// A member may hold several roles, stored as one comma-separated value.
+function roleMenuItems(member: { id: string, role: string }) {
+  const held = parseOrgRoles(member.role)
+  return roles.filter(r => r.value !== 'owner').map((r) => {
+    const checked = held.includes(r.value)
+    return {
+      label: r.label,
+      type: 'checkbox' as const,
+      checked,
+      disabled: checked && held.length === 1,
+      onUpdateChecked: (next: boolean) => updateMemberRole(member.id, toggleOrgRole(held, r.value, next))
+    }
+  })
+}
+
+function roleLabels(role: string) {
+  return parseOrgRoles(role)
+    .map(value => roles.find(r => r.value === value)?.label ?? value)
+    .join(', ')
+}
 </script>
 
 <template>
@@ -256,16 +280,11 @@ const roles = [
               <!-- Role Dropdown -->
               <UDropdownMenu
                 v-else
-                :items="roles.filter(r => r.value !== 'owner').map(r => ({
-                  label: r.label,
-                  type: 'checkbox',
-                  checked: member.role === r.value,
-                  onUpdateChecked: () => updateMemberRole(member.id, r.value)
-                }))"
+                :items="roleMenuItems(member)"
                 arrow
               >
                 <UButton
-                  :label="member.role"
+                  :label="roleLabels(member.role)"
                   variant="outline"
                   size="xs"
                   icon="i-lucide-chevron-down"

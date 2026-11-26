@@ -17,13 +17,8 @@ const store = vi.hoisted(() => ({
 
 vi.mock('h3', () => ({ readMultipartFormData }))
 vi.mock('~~/server/services/file/fileService', () => ({
-  FileService: class {
-    uploadFile = uploadFile
-  },
+  createFileService: async () => ({ uploadFile }),
   useFileManagerConfig: () => fileConfig.value
-}))
-vi.mock('~~/server/services/file/storage/factory', () => ({
-  createStorageProvider: async () => ({ name: 'test' })
 }))
 vi.mock('~~/server/services/file/rateLimitStores', () => ({
   defaultRateLimitStore: () => store

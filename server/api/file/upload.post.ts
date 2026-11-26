@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 import { readMultipartFormData } from 'h3'
 import { checkUploadContent } from '~~/server/services/file/contentSniffer'
-import { FileService, useFileManagerConfig } from '~~/server/services/file/fileService'
+import { createFileService, useFileManagerConfig } from '~~/server/services/file/fileService'
 import { RateLimitUnavailableError, UploadRateLimiter } from '~~/server/services/file/rateLimiter'
-import { createStorageProvider } from '~~/server/services/file/storage/factory'
 import {
   checkDeclaredBodyLength,
   MAX_FILES_PER_UPLOAD,
@@ -112,8 +111,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const storageProvider = await createStorageProvider(config.storage)
-  const fileService = new FileService(storageProvider)
+  const fileService = await createFileService()
 
   try {
     const file = await fileService.uploadFile(

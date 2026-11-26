@@ -23,5 +23,8 @@
   `NUXT_APP_NAME`: export `NUXT_APP_NAME='House of BetterAuth'` in the shell that runs vitest (the
   build reads it only for a meta tag). Locally: build and start the app as the job does, install the
   browser (`pnpm exec playwright-core install --only-shell chromium`), then
-  `pnpm exec vitest run --project e2e`. A failed test leaves a screenshot of each page it opened in
-  `test-results/e2e/` (`tests/e2e/setup.ts`).
+  `pnpm exec vitest run --project e2e`. A failed test leaves a screenshot of each page still open in
+  `test-results/e2e/` (`tests/e2e/setup.ts`, which patches `chromium.launch`; the unit test
+  `e2eScreenshotPatch.test.ts` fails if `@nuxt/test-utils` launches another copy of playwright-core).
+  To check the screenshots by hand, run the suite with a wrong `NUXT_APP_NAME`: the tests that look
+  for the title fail and leave PNGs there.

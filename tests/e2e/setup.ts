@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 //
-// Screenshots the pages a failed e2e test opened into test-results/e2e/,
-// which the CI `e2e` job uploads. @nuxt/test-utils takes no screenshot
-// itself, and its own afterEach clears the test context before this
-// file's hooks run, so the browsers are recorded at launch instead.
+// Screenshots every page still open when an e2e test fails into
+// test-results/e2e/, which the CI `e2e` job uploads: the pages the test
+// opened, and those a beforeAll or an earlier test opened and it reused.
+// @nuxt/test-utils takes no screenshot itself, and its own afterEach
+// clears the test context before this file's hooks run, so the browsers
+// are recorded at launch instead (tests/unit/e2eScreenshotPatch.test.ts
+// checks that the patched chromium is the one @nuxt/test-utils launches).
 import type { Browser, Page } from 'playwright-core'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -30,9 +33,8 @@ function fileSafe(name: string): string {
 }
 
 beforeEach(({ task, onTestFailed }) => {
-  const before = new Set(openPages())
   onTestFailed(async () => {
-    const pages = openPages().filter(page => !before.has(page) && !page.isClosed())
+    const pages = openPages().filter(page => !page.isClosed())
     if (pages.length === 0)
       return
     // fullName starts with the test file's path.

@@ -63,11 +63,15 @@ for variant in referer typed foreign refused; do
     || fail "no id in ssr-org-$variant.json"
 done
 
-# Active organization of the session, empty when there is none.
+# Active organization of the session, empty when there is none. Fails on
+# an HTTP error and on a body without a session (better-auth answers 200
+# null when the session is gone), which would otherwise read as "none".
 active_org() {
-  curl -sS --max-time 30 -H "Cookie: $cookie" \
+  curl -fsS --max-time 30 -H "Cookie: $cookie" \
     "$NUXT_APP_URL/api/auth/get-session?disableCookieCache=true" \
-    | jq -r '.session.activeOrganizationId // empty'
+    | jq -er 'if (.session | type) == "object"
+      then .session.activeOrganizationId // ""
+      else error("get-session returned no session") end'
 }
 
 # No -L: a refused set-active redirects to another organization, so only

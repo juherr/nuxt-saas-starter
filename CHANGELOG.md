@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The members page role menu shows every role a member holds and adds or removes one role at a
   time instead of replacing the whole list; the last role cannot be removed
   ([#132](https://github.com/juherr/nuxt-saas-starter/pull/132))
+- Users holding the admin role among several roles (`user,admin`) can reach the admin pages and
+  API and delete other users' files ([#123](https://github.com/juherr/nuxt-saas-starter/pull/123))
 
 ## [0.1.0] - 2026-11-18
 

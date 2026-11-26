@@ -5,6 +5,7 @@ import { isApiKeyManagerRole } from '~~/server/utils/apiKeyMetadata'
 import {
   hasOrgRole,
   hasPermission,
+  hasRole,
   isAdminOrOwner,
   isOwner,
   parseOrgRoles,
@@ -50,6 +51,31 @@ describe('hasOrgRole', () => {
     ['owner', []]
   ] satisfies [string | null | undefined, OrgRole[]][])('refuses %j for %j', (role, roles) => {
     expect(hasOrgRole(role, roles)).toBe(false)
+  })
+})
+
+describe('hasRole', () => {
+  it.each([
+    ['a single role', 'admin'],
+    ['a role list', 'admin,user'],
+    ['a role list with the role last', 'user,admin'],
+    ['a role list with spaces', 'user, admin']
+  ])('finds admin in %s', (_label, role) => {
+    expect(hasRole(role, 'admin')).toBe(true)
+  })
+
+  it.each([
+    ['another role', 'user'],
+    ['a role list without it', 'user,moderator'],
+    ['a role that only contains it', 'superadmin'],
+    ['a differently cased role', 'Admin'],
+    ['a differently cased role list', 'user,ADMIN'],
+    ['an empty string', ''],
+    ['separators only', ',,'],
+    ['null', null],
+    ['undefined', undefined]
+  ])('does not find admin in %s', (_label, role) => {
+    expect(hasRole(role, 'admin')).toBe(false)
   })
 })
 

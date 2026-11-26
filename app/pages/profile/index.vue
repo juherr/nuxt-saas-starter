@@ -2,6 +2,8 @@
 <i18n src="./i18n.json"></i18n>
 
 <script setup lang="ts">
+import { hasRole } from '~~/shared/utils/permissions'
+
 const { user, session, client } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
@@ -59,7 +61,7 @@ onMounted(() => {
           <div class="space-y-2">
             <p class="flex justify-between">
               <span class="text-neutral-500 dark:text-neutral-400">{{ t('profile.role') }}:</span>
-              <UBadge :color="user?.role === 'admin' ? 'primary' : 'neutral'">
+              <UBadge :color="hasRole(user?.role, 'admin') ? 'primary' : 'neutral'">
                 {{ user?.role }}
               </UBadge>
             </p>

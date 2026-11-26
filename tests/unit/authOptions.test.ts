@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
-import type { SQL } from 'drizzle-orm'
-import { PgDialect } from 'drizzle-orm/pg-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '~~/server/db/schema'
+import { renderSql } from './support/sql'
 
 const db = vi.hoisted(() => {
-  const where = vi.fn(async () => [])
-  const selectWhere = vi.fn(async (): Promise<{ id: string }[]> => [])
+  const where = vi.fn(async (_condition: unknown) => [])
+  const selectWhere = vi.fn(async (_condition: unknown): Promise<{ id: string }[]> => [])
   const from = vi.fn(() => ({ where: selectWhere }))
   return { where, selectWhere, from, delete: vi.fn(() => ({ where })), select: vi.fn(() => ({ from })) }
 })
@@ -155,9 +154,8 @@ describe('the user delete hook', () => {
     const result = await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)
 
     expect(db.from).toHaveBeenCalledWith(schema.file)
-    const [[where]] = db.selectWhere.mock.calls as unknown as [[SQL]]
     // No is_active filter and no limit: inactive files go too.
-    expect(new PgDialect().sqlToQuery(where)).toMatchObject({ sql: '"file"."uploaded_by" = $1', params: ['user-1'] })
+    expect(renderSql(db.selectWhere.mock.calls[0]?.[0])).toMatchObject({ sql: '"file"."uploaded_by" = $1', params: ['user-1'] })
     expect(fileService.deleteFile.mock.calls).toEqual([['file-1', 'user-1'], ['file-2', 'user-1']])
     expect(result).not.toBe(false)
   })
@@ -221,9 +219,7 @@ describe('the user delete hook', () => {
 
     expect(db.delete).toHaveBeenCalledWith(schema.apiKey)
     expect(db.where).toHaveBeenCalledTimes(1)
-    const [[where]] = db.where.mock.calls as unknown as [[SQL]]
-    const condition = new PgDialect().sqlToQuery(where)
-    expect(condition).toMatchObject({ sql: '"api_key"."reference_id" = $1', params: ['user-1'] })
+    expect(renderSql(db.where.mock.calls[0]?.[0])).toMatchObject({ sql: '"api_key"."reference_id" = $1', params: ['user-1'] })
     // better-auth cancels the deletion when a before hook returns false.
     expect(result).not.toBe(false)
   })

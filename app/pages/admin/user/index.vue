@@ -2,7 +2,7 @@
 <i18n src="./i18n.json"></i18n>
 
 <script setup lang="ts">
-import { hasRole } from '~~/shared/utils/permissions'
+import { hasRole, parseOrgRoles, toggleOrgRole } from '~~/shared/utils/permissions'
 import BanUserModal from './components/BanUserModal.vue'
 import CreateUserModal from './components/CreateUserModal.vue'
 
@@ -109,13 +109,22 @@ const getRoleDropdownItems = (original: User) => {
       label: t(`user.roles.${role}`),
       type: 'checkbox' as const,
       checked: hasRole(original.role, role),
-      onUpdateChecked: async () => {
+      onUpdateChecked: async (checked: boolean) => {
+        const next = toggleOrgRole(parseOrgRoles(original.role), role, checked)
+        // A user keeps at least one role: the last one cannot be unchecked.
+        if (next.length === 0)
+          return
+        // setRole takes only the configured roles: refuse a list holding another one.
+        if (!next.every((entry): entry is typeof role => roles.some(r => r === entry))) {
+          console.error(`Unknown role in ${original.role}`)
+          return
+        }
         const result = await client.admin.setRole({
           userId: original.id,
-          role
+          role: next
         })
         if (result.data?.user) {
-          original.role = role
+          original.role = next.join(',')
           refresh()
         } else {
           console.error(result.error)

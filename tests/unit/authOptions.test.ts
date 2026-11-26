@@ -152,7 +152,7 @@ describe('the user delete hook', () => {
   it('deletes every file the deleted user uploaded', async () => {
     db.selectWhere.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }])
 
-    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+    const result = await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)
 
     expect(db.from).toHaveBeenCalledWith(schema.file)
     const [[where]] = db.selectWhere.mock.calls as unknown as [[SQL]]
@@ -165,7 +165,7 @@ describe('the user delete hook', () => {
   it('records the signed-in user as the actor of the file deletions', async () => {
     db.selectWhere.mockResolvedValue([{ id: 'file-1' }])
 
-    await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, { context: { session: { user: { id: 'admin-1' } } } })
+    await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, { context: { session: { user: { id: 'admin-1' } } } })
 
     expect(fileService.deleteFile).toHaveBeenCalledWith('file-1', 'admin-1')
   })
@@ -181,7 +181,7 @@ describe('the user delete hook', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     try {
-      const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+      const result = await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)
 
       expect(result).not.toBe(false)
       expect(fileService.deleteFile.mock.calls.map(([id]) => id)).toEqual(['file-1', 'file-2', 'file-3'])
@@ -197,7 +197,7 @@ describe('the user delete hook', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     try {
-      const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+      const result = await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)
 
       expect(result).not.toBe(false)
       expect(consoleError).toHaveBeenCalled()
@@ -209,7 +209,7 @@ describe('the user delete hook', () => {
   // A missing storage configuration must not break deleting a user who
   // never uploaded anything.
   it('does not build the file service when the user has no files', async () => {
-    await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+    await options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)
 
     expect(createFileService).not.toHaveBeenCalled()
   })
@@ -228,10 +228,30 @@ describe('the user delete hook', () => {
     expect(result).not.toBe(false)
   })
 
-  // Delete paths run outside a transaction: a failing after hook would leave
-  // the user deleted with its cached sessions alive, a failing before hook
-  // aborts the deletion with nothing modified.
-  it('cleans up before the user row is deleted, not after', () => {
-    expect(options.databaseHooks.user.delete?.after).toBeUndefined()
+  // Stored objects cannot be restored: deleting them before the user row
+  // would lose them when the deletion fails or another hook cancels it.
+  it('leaves the files alone until the user row is deleted', async () => {
+    db.selectWhere.mockResolvedValue([{ id: 'file-1' }])
+
+    await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+
+    expect(db.select).not.toHaveBeenCalled()
+    expect(createFileService).not.toHaveBeenCalled()
+    expect(fileService.deleteFile).not.toHaveBeenCalled()
+  })
+
+  // The user row is already gone when the after hook runs, and better-auth
+  // clears the cached sessions only once it returns
+  // (db/internal-adapter.mjs deleteUser): it must never throw.
+  it('keeps the deletion done when the file lookup fails', async () => {
+    db.selectWhere.mockRejectedValue(new Error('connection lost'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await expect(options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)).resolves.toBeUndefined()
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('user-1'), expect.any(Error))
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })

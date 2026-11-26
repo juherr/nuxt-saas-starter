@@ -39,8 +39,8 @@ const emailSender = () => `${runtimeConfig.public.appName} <${runtimeConfig.publ
 
 /**
  * Deletes every file `userId` uploaded, active or not: file.uploaded_by has
- * no foreign key to user. A failure never blocks the account deletion: it is
- * logged, and deleteFile keeps the row and audits the failure, so the stored
+ * no foreign key to user. A failure to delete one file is logged and the
+ * others are still deleted; deleteFile keeps the row and audits the failure, so the stored
  * object can be cleaned up later. The file service is built only when there
  * is something to delete, so a missing storage configuration does not stop
  * deleting a user who never uploaded anything.
@@ -393,12 +393,21 @@ export const createBetterAuth = () => betterAuth({
         // would leave the user deleted and its cached sessions alive
         // (db/with-hooks.mjs, db/internal-adapter.mjs). Returning false
         // would cancel the deletion, so return nothing.
-        before: async (user, context) => {
+        before: async (user) => {
           await getDB()
             .delete(schema.apiKey)
             .where(eq(schema.apiKey.referenceId, user.id))
-          // The signed-in user (the account owner, or an admin) is the actor.
-          await deleteUploadedFiles(user.id, context?.context.session?.user.id ?? user.id)
+        },
+        // Stored objects cannot be restored, so they go only once the user
+        // row is gone: a failed or cancelled deletion keeps them. This hook
+        // never throws (see above). The signed-in user (the account owner,
+        // or an admin) is the actor.
+        after: async (user, context) => {
+          try {
+            await deleteUploadedFiles(user.id, context?.context.session?.user.id ?? user.id)
+          } catch (error) {
+            console.error(`[Auth] Cannot list the files of deleted user ${user.id}:`, error)
+          }
         }
       }
     },

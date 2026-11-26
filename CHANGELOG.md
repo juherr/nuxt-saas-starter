@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog, following Keep a Changelog. Commit messages follow Conventional Commits, checked
   by a commitlint `commit-msg` hook and, on pull requests, on the title and the commits.
   `CONTRIBUTING.md` and a pull request template describe both
+- Deleting a user as an admin writes an audit log entry naming the admin, the removed user and the
+  result, refused attempts included
+  ([#139](https://github.com/juherr/nuxt-saas-starter/pull/139))
 
 ### Changed
 

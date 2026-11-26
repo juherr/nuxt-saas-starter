@@ -183,16 +183,28 @@ The `DELETE` removes the legacy keys that were never linked to an organization: 
 hidden from every listing, and an owner or admin must recreate them.
 
 - **Deployment already on the better-auth 1.7 schema** (it has `api_key` and
-  `api_key_organization`): run the statements against the database **before building**. When
-  `DATABASE_URL` is set, the build applies the migrations (`applyMigrationsDuringBuild`), and the
-  migration `pnpm db:generate` writes for this change is `DROP TABLE "api_key_organization"
-  CASCADE`, which loses the links. Then run `pnpm db:generate` and build as usual.
+  `api_key_organization`): the migration `pnpm db:generate` writes for this change is
+  `DROP TABLE "api_key_organization" CASCADE`, which loses the links, and it is applied by
+  `pnpm build` when `DATABASE_URL` is set (`applyMigrationsDuringBuild`), by `pnpm dev` on start
+  and by `npx nuxt db migrate`. So:
+  1. Stop the running app, or at least API key creation: until the new code is deployed, the old
+     one keeps creating keys owned by their creator and linked through `api_key_organization`.
+  2. Run the statements against the database.
+  3. Run `pnpm db:generate`, build and deploy as usual.
+  4. Delete any key the DROP left without an organization (one created between steps 2 and 3, if
+     the app kept running): `verifyApiKey` would still accept it, but no one can list or revoke it.
+
+     ```sql
+     DELETE FROM "api_key" WHERE "reference_id" NOT IN (SELECT "id" FROM "organization");
+     ```
 - **Deployment upgrading from the better-auth 1.4 schema in one go**: `pnpm db:generate` writes a
   single migration that copies `apiKey` into `api_key` and drops `api_key_organization`. Follow
-  [Upgrading from better-auth 1.4](#upgrading-from-better-auth-14) and put the `UPDATE` and
-  `DELETE` statements, each ending with `;--> statement-breakpoint`, after the copy of its step 1
-  and before `DROP TABLE "api_key_organization" CASCADE`. NuxtHub applies a migration statement by
-  statement, not in one transaction, so back up the database first.
+  [Upgrading from better-auth 1.4](#upgrading-from-better-auth-14): put the copy of its step 1,
+  then the `UPDATE` and `DELETE` statements, each ending with `;--> statement-breakpoint`, before
+  the first generated statement that drops or alters `apiKey` or `api_key_organization` (the
+  generator may order `DROP TABLE "api_key_organization" CASCADE` before the `ALTER TABLE "apiKey"`
+  lines). NuxtHub applies a migration statement by statement, not in one transaction, so back up
+  the database first.
 
 ### Environment Variables
 

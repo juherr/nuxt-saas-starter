@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** API keys are owned by their organization through better-auth's API key plugin
   (`api_key.reference_id` holds the organization id); the `api_key_organization` table and
-  its backfill script are removed. Before building, run the SQL of
+  its backfill script are removed. Stop the app and, before building, run the SQL of
   [Upgrading to organization-owned API keys](README.md#upgrading-to-organization-owned-api-keys)
   (or add it to the generated migration when upgrading from better-auth 1.4 in one go): it moves
   linked keys to their organization and deletes the keys never linked. Clients create a key with a

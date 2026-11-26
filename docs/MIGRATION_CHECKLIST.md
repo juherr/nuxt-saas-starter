@@ -241,9 +241,12 @@ organization's id in `api_key.reference_id` (`references: 'organization'`), chec
 them with one SQL transaction before the next build.
 
 - [ ] Follow [Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys):
-  run its statements **before building** (the build applies the generated
-  `DROP TABLE "api_key_organization"`), or, when upgrading from the better-auth 1.4 schema in one
-  go, add them to the generated migration before that line.
+  stop the app (or API key creation), run its statements **before building** (`pnpm build`,
+  `pnpm dev` and `npx nuxt db migrate` all apply the generated
+  `DROP TABLE "api_key_organization"`), deploy, then delete the keys left without an organization.
+  When upgrading from the better-auth 1.4 schema in one go, add the copy and the statements to the
+  generated migration before its first statement that drops or alters `apiKey` or
+  `api_key_organization`.
 - [ ] Tell the affected users. Keys that were never linked to an organization are deleted by that
   transaction; an owner or admin must recreate them.
 - [ ] Update API clients: a key is created with a top-level `organizationId`

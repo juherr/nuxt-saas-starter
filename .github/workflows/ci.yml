@@ -215,3 +215,76 @@ jobs:
             foreign-host.log
             demo-sign-in-headers.txt
             demo-sign-in-body.txt
+
+  # Runs the Playwright e2e suite (vitest project `e2e`) in a browser
+  # against the built Node server, with throwaway PostgreSQL and Redis
+  # services. test:ci in the unit job leaves this project out.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres: *postgres-service
+      redis: *redis-service
+    # Throwaway values only, no repository secret. The pages render
+    # global.appName from app/i18n/global.json; the build reads
+    # NUXT_APP_NAME only for a meta tag. The e2e tests read NUXT_APP_NAME
+    # to find that title, so it must equal global.appName.
+    env:
+      NUXT_NITRO_PRESET: node-server
+      DATABASE_URL: postgres://smoke:smoke-password@localhost:5432/smoke
+      REDIS_URL: redis://localhost:6379
+      NUXT_APP_URL: http://localhost:3000
+      NUXT_PUBLIC_BASE_URL: http://localhost:3000
+      NUXT_APP_NAME: House of BetterAuth
+      NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
+      PORT: 3000
+      NUXT_TEST_APP_URL: http://localhost:3000
+      # The admin, seeded by create-admin.ts.
+      NUXT_ADMIN_EMAIL: e2e-admin@example.com
+      NUXT_ADMIN_PASSWORD: e2e-admin-password
+      # A regular user with a verified email (auth.test.ts expects /403).
+      NUXT_TEST_EMAIL: e2e-user@example.com
+      NUXT_TEST_PASSWORD: e2e-user-password
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      - name: Generate migrations
+        run: pnpm db:generate
+      - name: Build (applies the migrations through NuxtHub)
+        run: pnpm build
+      - name: Start the server
+        run: node .output/server/index.mjs > server.log 2>&1 &
+      - name: Wait for /api/health
+        run: .github/scripts/smoke-wait-health.sh
+      - name: Seed the admin
+        run: node create-admin.ts
+      - name: Seed the regular user
+        run: .github/scripts/e2e-seed-user.sh
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          POSTGRES_USER: smoke
+          POSTGRES_DB: smoke
+      # Headless chromium.launch() runs chromium-headless-shell in
+      # playwright-core 1.65.1 (getExecutableName), so the full browser is
+      # not downloaded. The version is the one in the lockfile.
+      - name: Install the Playwright browser
+        run: pnpm exec playwright-core install --with-deps --only-shell chromium
+      # Bounded below the job timeout: a hang fails this step instead of
+      # cancelling the job, so the failure() upload below still runs.
+      - name: Run the e2e suite
+        timeout-minutes: 15
+        run: >-
+          pnpm exec vitest run --project e2e
+          --reporter=default --reporter=junit
+          --outputFile.junit=test-results/e2e/junit.xml
+      # tests/e2e/setup.ts writes a screenshot of each page a failed test
+      # opened into test-results/e2e/.
+      - name: Upload the server log, screenshots and test report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-results
+          path: |
+            server.log
+            sign-up-body.txt
+            test-results/e2e/

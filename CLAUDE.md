@@ -37,7 +37,8 @@
 ## Checks
 - `pnpm lint --max-warnings=0` — also the husky pre-commit hook; never `--no-verify`.
 - `pnpm test:unit` (node project) · `pnpm test:ci` (unit + nuxt components, what CI runs) ·
-  `pnpm test` (all); the `e2e` project builds the app or targets `NUXT_TEST_APP_URL`, out of CI.
+  `pnpm test` (all); the `e2e` project targets `NUXT_TEST_APP_URL` (or builds the app) and runs
+  in the CI job `e2e` (`tests/CLAUDE.md`).
 - `pnpm typecheck` is blocking in CI and must stay at zero errors. Do not silence an error with
   `any`, `as unknown as`, `@ts-ignore`/`@ts-expect-error` or a non-null `!`. Use a guard instead.
 - `postgres` is loaded by NuxtHub and `ioredis` lazily by `server/utils/redis.ts`: only a booted app

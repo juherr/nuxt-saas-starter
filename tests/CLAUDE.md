@@ -14,5 +14,11 @@
   `server/utils/<name>` is `undefined` in those suites, so put a new shared helper in its own module.
 - Component tests: `mountSuspended` + `mockNuxtImport` from `@nuxt/test-utils/runtime`; SFCs with an
   `<i18n>` block need `mockNuxtImport('useI18n', () => () => ({ t: key => key }))`.
-- e2e: `setup({ host: process.env.NUXT_TEST_APP_URL })` + `createPage`; sign-in tests need an existing
-  user in `NUXT_TEST_EMAIL` / `NUXT_TEST_PASSWORD`.
+- e2e: `setup({ host: process.env.NUXT_TEST_APP_URL })` + `createPage`, run by the CI job `e2e`. Two
+  users must exist: an admin (`NUXT_ADMIN_EMAIL` / `PASSWORD`, `node create-admin.ts`) and a regular
+  user with a verified email (`NUXT_TEST_EMAIL` / `PASSWORD`, `.github/scripts/e2e-seed-user.sh`:
+  sign-up, then `email_verified = true`). Build with `NUXT_APP_NAME='House of BetterAuth'`
+  (`global.appName`, which the pages render). Locally: build and start the app as the job does, install
+  the browser (`pnpm exec playwright-core install --only-shell chromium`), then
+  `pnpm exec vitest run --project e2e`. A failed test leaves a screenshot of each page it opened in
+  `test-results/e2e/` (`tests/e2e/setup.ts`).

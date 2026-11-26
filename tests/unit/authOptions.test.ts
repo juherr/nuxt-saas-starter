@@ -6,8 +6,13 @@ import * as schema from '~~/server/db/schema'
 
 const db = vi.hoisted(() => {
   const where = vi.fn(async () => [])
-  return { where, delete: vi.fn(() => ({ where })) }
+  const selectWhere = vi.fn(async (): Promise<{ id: string }[]> => [])
+  const from = vi.fn(() => ({ where: selectWhere }))
+  return { where, selectWhere, from, delete: vi.fn(() => ({ where })), select: vi.fn(() => ({ from })) }
 })
+const fileService = vi.hoisted(() => ({ deleteFile: vi.fn(async (_id: string, _actor?: string) => true) }))
+const createFileService = vi.hoisted(() => vi.fn(async () => fileService))
+vi.mock('~~/server/services/file/fileService', () => ({ createFileService }))
 const settledUpgrade = { context: { body: { plan: 'pro', customerType: 'organization', referenceId: 'org-1', seats: 3 } } }
 const checkoutSeatsOverride = vi.hoisted(() => vi.fn())
 
@@ -132,6 +137,81 @@ describe('the user delete hook', () => {
   beforeEach(() => {
     db.delete.mockClear()
     db.where.mockClear()
+    db.select.mockClear()
+    db.from.mockClear()
+    db.selectWhere.mockReset()
+    db.selectWhere.mockResolvedValue([])
+    fileService.deleteFile.mockReset()
+    fileService.deleteFile.mockResolvedValue(true)
+    createFileService.mockReset()
+    createFileService.mockResolvedValue(fileService)
+  })
+
+  // file.uploaded_by has no foreign key to user: the hook deletes the
+  // stored objects and the rows itself, inactive files included.
+  it('deletes every file the deleted user uploaded', async () => {
+    db.selectWhere.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }])
+
+    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+
+    expect(db.from).toHaveBeenCalledWith(schema.file)
+    const [[where]] = db.selectWhere.mock.calls as unknown as [[SQL]]
+    // No is_active filter and no limit: inactive files go too.
+    expect(new PgDialect().sqlToQuery(where)).toMatchObject({ sql: '"file"."uploaded_by" = $1', params: ['user-1'] })
+    expect(fileService.deleteFile.mock.calls).toEqual([['file-1', 'user-1'], ['file-2', 'user-1']])
+    expect(result).not.toBe(false)
+  })
+
+  it('records the signed-in user as the actor of the file deletions', async () => {
+    db.selectWhere.mockResolvedValue([{ id: 'file-1' }])
+
+    await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, { context: { session: { user: { id: 'admin-1' } } } })
+
+    expect(fileService.deleteFile).toHaveBeenCalledWith('file-1', 'admin-1')
+  })
+
+  it('keeps deleting the account when a stored file cannot be deleted', async () => {
+    db.selectWhere.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }, { id: 'file-3' }])
+    fileService.deleteFile.mockImplementation(async (id: string) => {
+      if (id === 'file-2') {
+        throw new Error('storage unavailable')
+      }
+      return true
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+
+      expect(result).not.toBe(false)
+      expect(fileService.deleteFile.mock.calls.map(([id]) => id)).toEqual(['file-1', 'file-2', 'file-3'])
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('file-2'), expect.any(Error))
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('keeps deleting the account when the file service cannot be built', async () => {
+    db.selectWhere.mockResolvedValue([{ id: 'file-1' }])
+    createFileService.mockRejectedValue(new Error('S3 storage is missing NUXT_FILE_MANAGER_STORAGE_S3_BUCKET_NAME'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+
+      expect(result).not.toBe(false)
+      expect(consoleError).toHaveBeenCalled()
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  // A missing storage configuration must not break deleting a user who
+  // never uploaded anything.
+  it('does not build the file service when the user has no files', async () => {
+    await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
+
+    expect(createFileService).not.toHaveBeenCalled()
   })
 
   // api_key.reference_id has no foreign key to user since better-auth 1.5,

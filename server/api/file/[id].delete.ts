@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { FileService, useFileManagerConfig } from '~~/server/services/file/fileService'
-import { createStorageProvider } from '~~/server/services/file/storage/factory'
+import { createFileService } from '~~/server/services/file/fileService'
 import { hasRole } from '~~/shared/utils/permissions'
 
 const fileNotFound = () => createError({ statusCode: 404, statusMessage: 'File not found' })
@@ -11,7 +10,6 @@ const fileNotFound = () => createError({ statusCode: 404, statusMessage: 'File n
  * probed.
  */
 export default defineEventHandler(async (event) => {
-  const config = useFileManagerConfig()
   const user = await requireAuth(event)
   const fileId = getRouterParam(event, 'id')
 
@@ -21,8 +19,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'File ID is required'
     })
   }
-  const storage = await createStorageProvider(config.storage)
-  const fileService = new FileService(storage)
+  const fileService = await createFileService()
 
   const file = await fileService.getFile(fileId)
 

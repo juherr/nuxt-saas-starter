@@ -7,14 +7,7 @@ const deleteFile = vi.hoisted(() => vi.fn())
 const requireAuth = vi.hoisted(() => vi.fn())
 
 vi.mock('~~/server/services/file/fileService', () => ({
-  FileService: class {
-    getFile = getFile
-    deleteFile = deleteFile
-  },
-  useFileManagerConfig: () => ({ storage: { provider: 'local' } })
-}))
-vi.mock('~~/server/services/file/storage/factory', () => ({
-  createStorageProvider: async () => ({ name: 'test' })
+  createFileService: async () => ({ getFile, deleteFile })
 }))
 
 beforeAll(() => {

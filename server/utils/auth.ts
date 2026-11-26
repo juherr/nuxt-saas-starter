@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { H3Event } from 'h3'
+import type { FileService } from '~~/server/services/file/fileService'
 import type { DemoRequest } from '~~/shared/utils/demoMode'
 import type { User } from '~~/shared/utils/types'
 import { apiKey } from '@better-auth/api-key'
@@ -10,6 +11,7 @@ import { admin as adminPlugin, openAPI, organization } from 'better-auth/plugins
 import { and, eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import * as schema from '~~/server/db/schema'
+import { createFileService } from '~~/server/services/file/fileService'
 import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
 import { ac, admin, member, owner } from '~~/shared/utils/permissions'
@@ -34,6 +36,38 @@ console.log('Schema keys:', Object.keys(schema))
 const isAuthSchemaCommand = process.argv.some(arg => arg.includes('server/db/schema/auth.ts'))
 
 const emailSender = () => `${runtimeConfig.public.appName} <${runtimeConfig.public.appNotifyEmail}>`
+
+/**
+ * Deletes every file `userId` uploaded, active or not: file.uploaded_by has
+ * no foreign key to user. A failure never blocks the account deletion: it is
+ * logged, and deleteFile keeps the row and audits the failure, so the stored
+ * object can be cleaned up later. The file service is built only when there
+ * is something to delete, so a missing storage configuration does not stop
+ * deleting a user who never uploaded anything.
+ */
+async function deleteUploadedFiles(userId: string, actorId: string) {
+  const files = await getDB()
+    .select({ id: schema.file.id })
+    .from(schema.file)
+    .where(eq(schema.file.uploadedBy, userId))
+  if (!files.length) {
+    return
+  }
+  let fileService: FileService
+  try {
+    fileService = await createFileService()
+  } catch (error) {
+    console.error(`[Auth] Cannot delete the ${files.length} files of user ${userId}:`, error)
+    return
+  }
+  for (const { id } of files) {
+    try {
+      await fileService.deleteFile(id, actorId)
+    } catch (error) {
+      console.error(`[Auth] Failed to delete file ${id} of user ${userId}:`, error)
+    }
+  }
+}
 
 /**
  * Auth endpoints the app does not serve. Subscriptions are cancelled and
@@ -359,10 +393,12 @@ export const createBetterAuth = () => betterAuth({
         // would leave the user deleted and its cached sessions alive
         // (db/with-hooks.mjs, db/internal-adapter.mjs). Returning false
         // would cancel the deletion, so return nothing.
-        before: async (user) => {
+        before: async (user, context) => {
           await getDB()
             .delete(schema.apiKey)
             .where(eq(schema.apiKey.referenceId, user.id))
+          // The signed-in user (the account owner, or an admin) is the actor.
+          await deleteUploadedFiles(user.id, context?.context.session?.user.id ?? user.id)
         }
       }
     },

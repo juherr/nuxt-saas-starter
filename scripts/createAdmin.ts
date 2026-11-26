@@ -45,16 +45,17 @@ export function readCreateAdminConfig(env: CreateAdminEnv): CreateAdminConfig {
     throw new Error('DATABASE_URL is not set: set it (or NUXT_DATABASE_URL) to the PostgreSQL URL, '
       + 'in the environment or in .env.')
   }
-  const missing = (['NUXT_ADMIN_EMAIL', 'NUXT_ADMIN_PASSWORD'] as const).filter(name => !env[name])
-  if (missing.length > 0) {
+  const { NUXT_ADMIN_EMAIL: email, NUXT_ADMIN_PASSWORD: password } = env
+  if (!email || !password) {
+    const missing = (['NUXT_ADMIN_EMAIL', 'NUXT_ADMIN_PASSWORD'] as const).filter(name => !env[name])
     throw new Error(`${missing.join(' and ')} not set: set the admin's email and password, `
       + 'in the environment or in .env.')
   }
   return {
     databaseUrl,
     connectTimeoutMs: databaseConnectTimeoutMs(env.NUXT_DATABASE_CONNECT_TIMEOUT_MS),
-    email: env.NUXT_ADMIN_EMAIL ?? '',
-    password: env.NUXT_ADMIN_PASSWORD ?? ''
+    email,
+    password
   }
 }
 

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+name: Setup
+description: Install pnpm and Node from .nvmrc, restore the pnpm cache and install the dependencies.
+
+# A local action is read from the checked-out tree, so actions/checkout
+# must run before it. pnpm/action-setup comes before setup-node, whose
+# `cache: pnpm` needs pnpm on the PATH.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile
+      shell: bash

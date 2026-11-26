@@ -8,12 +8,13 @@ const storedRow = {
   start: 'abcdef',
   prefix: 'sk',
   key: 'hashed-secret',
-  userId: 'user-1',
+  configId: 'default',
+  referenceId: 'org-1',
   enabled: true,
   rateLimitEnabled: true,
   requestCount: 3,
   permissions: '{"files":["read"]}',
-  metadata: '{"organizationId":"org-1"}',
+  metadata: '{"client":"ci-runner"}',
   lastRequest: new Date('2026-01-02T00:00:00Z'),
   expiresAt: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
@@ -43,7 +44,7 @@ describe('toApiKeyDto', () => {
   it('never carries the key hash, owner, permissions or metadata', () => {
     const serialized = JSON.stringify(toApiKeyDto(storedRow))
 
-    for (const secret of ['hashed-secret', 'user-1', 'organizationId', 'files']) {
+    for (const secret of ['hashed-secret', 'org-1', 'default', 'ci-runner', 'files']) {
       expect(serialized).not.toContain(secret)
     }
   })

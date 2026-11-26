@@ -7,7 +7,7 @@ const db = vi.hoisted(() => {
   const where = vi.fn(async (_condition: unknown) => [])
   const selectWhere = vi.fn(async (_condition: unknown): Promise<({ id: string } | { image: string | null })[]> => [])
   const from = vi.fn(() => ({ where: selectWhere }))
-  return { where, selectWhere, from, delete: vi.fn(() => ({ where })), select: vi.fn(() => ({ from })) }
+  return { where, selectWhere, from, delete: vi.fn((_table: unknown) => ({ where })), select: vi.fn(() => ({ from })) }
 })
 const fileService = vi.hoisted(() => ({ deleteFile: vi.fn(async (_id: string, _actor?: string) => true) }))
 const createFileService = vi.hoisted(() => vi.fn(async () => fileService))
@@ -77,6 +77,20 @@ describe('the before hook', () => {
   })
 })
 
+describe('the API key plugin endpoints the app does not use', () => {
+  const unused = ['/api-key/get', '/api-key/list', '/api-key/update', '/api-key/delete']
+
+  it('are disabled, while creation and server-side verification stay available', () => {
+    expect(options.disabledPaths).toEqual(expect.arrayContaining(unused))
+    expect(options.disabledPaths).not.toContain('/api-key/create')
+    expect(options.disabledPaths).not.toContain('/api-key/verify')
+  })
+
+  it.each(unused)('refuses %s by its resolved path', async (path) => {
+    await expect(options.hooks.before({ path })).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
 describe('the invitation email', () => {
   it('links to the accept-invite page', async () => {
     getResendClient.mockReturnValueOnce(resend)
@@ -118,6 +132,26 @@ describe('the organization create hook', () => {
     const result = await organizationHooks().beforeCreateOrganization({ organization, user })
 
     expect(result).toBeUndefined()
+  })
+})
+
+describe('the organization delete hook', () => {
+  beforeEach(() => {
+    db.delete.mockClear()
+    db.where.mockClear()
+  })
+
+  it('deletes the organization\'s API keys before the organization goes', async () => {
+    const organizationPlugin = options.plugins.find((plugin: any) => plugin.id === 'organization')
+
+    await organizationPlugin.options.organizationHooks.beforeDeleteOrganization({
+      organization: { id: 'org-1' },
+      user: { id: 'user-1' }
+    })
+
+    expect(db.delete).toHaveBeenCalledTimes(1)
+    expect(db.delete).toHaveBeenCalledWith(schema.apiKey)
+    expect(renderSql(db.where.mock.calls[0]?.[0]).params).toEqual(['org-1'])
   })
 })
 

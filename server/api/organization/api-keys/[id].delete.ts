@@ -10,10 +10,9 @@ const keyNotFound = () => createError({ statusCode: 404, statusMessage: 'API key
 /**
  * Revokes a key of an organization the caller manages. The key's
  * organization is its reference_id. An unknown key, another
- * organization's key, a key whose reference_id is not an organization the
- * caller manages (such as a key referencing a user) and a caller who does
- * not manage the key's organization all get the same 404, checked before
- * anything is deleted.
+ * organization's key and a key whose reference_id is not an organization
+ * the caller manages (such as a key referencing a user) all get the same
+ * 404, checked before anything is deleted.
  */
 export default defineEventHandler(async (event) => {
   await requireAuthSession(event)

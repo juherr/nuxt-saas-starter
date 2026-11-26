@@ -48,6 +48,10 @@ Use NuxtHub for every environment:
 DATABASE_URL=postgres://user:password@host:5432/database npx nuxt db migrate
 ```
 
+Run it from the source checkout, after `pnpm install` and `pnpm db:generate`, not from `.output`:
+it runs `nuxt prepare` there and applies the files of `server/db/migrations`. The CI job
+`smoke-build-without-db` deploys a build made without a database this way.
+
 Running it again prints `Database migrations up to date`. If the database was already migrated
 with `pnpm db:migrate`, record the existing migrations in `_hub_migrations` once instead of
 applying them again:

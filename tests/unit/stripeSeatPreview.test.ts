@@ -3,7 +3,7 @@ import type { FakeSubscription } from './support/stripeSubscriptionsFake'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getTierForInterval } from '~~/shared/utils/plans'
 import { callRoute, stubNitroGlobals } from './support/nitroGlobals'
-import { fakeSubscription, stripeSubscriptionsFake } from './support/stripeSubscriptionsFake'
+import { FAKE_TRIAL_END, fakeSubscription, stripeSubscriptionsFake } from './support/stripeSubscriptionsFake'
 
 const createStripeClient = vi.hoisted(() => vi.fn())
 
@@ -62,8 +62,15 @@ describe('the preview-seat-change endpoint on a trialing subscription', () => {
     )
 
     expect(preview.total).toBe(Math.round((yearly.price + yearly.seatPrice) * 100))
-    expect(preview.periodEnd).toBeGreaterThan(Math.floor(Date.now() / 1000) + 31_000_000)
     expect(createPreview).not.toHaveBeenCalled()
+  })
+
+  it('ends the previewed period with the trial, not a year from now', async () => {
+    stubStripe(trialingSubscription({ interval: 'year' }))
+
+    const preview = await callRoute<{ periodEnd: number }>(load, { organizationId: 'org-a', seats: 2 })
+
+    expect(preview.periodEnd).toBe(FAKE_TRIAL_END)
   })
 
   it('fails explicitly when the item price has no recurring interval', async () => {
@@ -73,5 +80,59 @@ describe('the preview-seat-change endpoint on a trialing subscription', () => {
       .then(() => undefined, (error: unknown) => error)
 
     expect(outcome).toMatchObject({ statusCode: 500, statusMessage: 'Subscription price has no billing interval' })
+  })
+})
+
+describe('the preview-seat-change endpoint on an active subscription', () => {
+  /** What Stripe's preview invoice reports as the end of the period it bills. */
+  const INVOICE_PERIOD_END = 1_850_000_000
+
+  function activeSubscription(interval: 'month' | 'year'): FakeSubscription {
+    const subscription = fakeSubscription('sub_active', 'active')
+    subscription.items.data[0]!.price.recurring = { interval }
+    return subscription
+  }
+
+  function stubPreviewInvoice(subscription: FakeSubscription) {
+    const { createPreview } = stubStripe(subscription)
+    createPreview.mockResolvedValue({
+      amount_due: 5000,
+      total: 5000,
+      subtotal: 5000,
+      currency: 'usd',
+      period_end: INVOICE_PERIOD_END,
+      lines: { data: [] }
+    })
+    return createPreview
+  }
+
+  beforeEach(() => {
+    createStripeClient.mockReset()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('keeps the current period end on a seat change of a yearly subscription', async () => {
+    const createPreview = stubPreviewInvoice(activeSubscription('year'))
+
+    const preview = await callRoute<{ periodEnd: number }>(
+      load,
+      { organizationId: 'org-a', seats: 3, newInterval: 'year' }
+    )
+
+    expect(createPreview).toHaveBeenCalledOnce()
+    expect(preview.periodEnd).toBe(INVOICE_PERIOD_END)
+  })
+
+  it('starts a yearly period today when a monthly subscription moves to yearly', async () => {
+    stubPreviewInvoice(activeSubscription('month'))
+    const before = Math.floor(Date.now() / 1000)
+
+    const preview = await callRoute<{ periodEnd: number }>(
+      load,
+      { organizationId: 'org-a', seats: 3, newInterval: 'year' }
+    )
+
+    expect(preview.periodEnd).toBeGreaterThanOrEqual(before + 31_536_000)
+    expect(preview.periodEnd).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31_536_000)
   })
 })

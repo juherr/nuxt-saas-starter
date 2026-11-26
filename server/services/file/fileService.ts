@@ -7,6 +7,7 @@ import { v7 as uuidv7 } from 'uuid'
 import { file as fileTable } from '~~/server/db/schema'
 import { logAuditEvent } from '~~/server/utils/auditLogger'
 import { buildStorageName, sanitizeDisplayName } from './fileNames'
+import { createStorageProvider } from './storage/factory'
 
 export const useFileManagerConfig = (): FileManagerConfig => {
   // The generated server runtime config type infers `provider: string` and
@@ -190,3 +191,10 @@ export class FileService {
       .offset(offset)
   }
 }
+
+/**
+ * Builds a FileService on the storage provider the runtime configuration
+ * selects. Throws when that configuration is missing or incomplete.
+ */
+export const createFileService = async (): Promise<FileService> =>
+  new FileService(await createStorageProvider(useFileManagerConfig().storage))

@@ -93,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A removed user, or a revoked session, loses access to the API routes at once instead of keeping
   it for up to five minutes through the session cookie cache
   ([#124](https://github.com/juherr/nuxt-saas-starter/pull/124))
+- Deleting an account deletes the files the user uploaded, rows and stored objects. A file whose
+  storage deletion fails is logged and kept for a later cleanup, without blocking the account
+  deletion ([#125](https://github.com/juherr/nuxt-saas-starter/pull/125))
 
 ## [0.1.0] - 2026-11-18
 

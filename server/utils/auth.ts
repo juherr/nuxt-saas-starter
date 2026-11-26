@@ -10,6 +10,7 @@ import { admin as adminPlugin, openAPI, organization } from 'better-auth/plugins
 import { and, eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import * as schema from '~~/server/db/schema'
+import { createFileService } from '~~/server/services/file/fileService'
 import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
 import { ac, admin, member, owner } from '~~/shared/utils/permissions'
@@ -34,6 +35,40 @@ console.log('Schema keys:', Object.keys(schema))
 const isAuthSchemaCommand = process.argv.some(arg => arg.includes('server/db/schema/auth.ts'))
 
 const emailSender = () => `${runtimeConfig.public.appName} <${runtimeConfig.public.appNotifyEmail}>`
+
+/**
+ * Deletes each file as `actorId`. A failure to delete one file is logged,
+ * with `describe(id)` naming it, and the others are still deleted;
+ * deleteFile keeps the row and audits the failure, so the stored object can
+ * be cleaned up later. The file service is built only when there is
+ * something to delete, so a missing storage configuration does not get in
+ * the way when the list is empty; a failure to build it is thrown.
+ */
+async function deleteFilesQuietly(fileIds: string[], actorId: string, describe: (id: string) => string) {
+  if (!fileIds.length) {
+    return
+  }
+  const fileService = await createFileService()
+  for (const id of fileIds) {
+    try {
+      await fileService.deleteFile(id, actorId)
+    } catch (error) {
+      console.error(`[Auth] Failed to delete ${describe(id)}:`, error)
+    }
+  }
+}
+
+/**
+ * Deletes every file `userId` uploaded, active or not: file.uploaded_by has
+ * no foreign key to user.
+ */
+async function deleteUploadedFiles(userId: string, actorId: string) {
+  const files = await getDB()
+    .select({ id: schema.file.id })
+    .from(schema.file)
+    .where(eq(schema.file.uploadedBy, userId))
+  await deleteFilesQuietly(files.map(({ id }) => id), actorId, id => `file ${id} of user ${userId}`)
+}
 
 /**
  * Auth endpoints the app does not serve. Subscriptions are cancelled and
@@ -363,6 +398,17 @@ export const createBetterAuth = () => betterAuth({
           await getDB()
             .delete(schema.apiKey)
             .where(eq(schema.apiKey.referenceId, user.id))
+        },
+        // Stored objects cannot be restored, so they go only once the user
+        // row is gone: a failed or cancelled deletion keeps them. This hook
+        // never throws (see above). The signed-in user (the account owner,
+        // or an admin) is the actor.
+        after: async (user, context) => {
+          try {
+            await deleteUploadedFiles(user.id, context?.context.session?.user.id ?? user.id)
+          } catch (error) {
+            console.error(`[Auth] Cannot delete the files of deleted user ${user.id}:`, error)
+          }
         }
       }
     },

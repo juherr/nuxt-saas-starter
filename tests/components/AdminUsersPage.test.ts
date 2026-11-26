@@ -47,7 +47,8 @@ const LayoutStub = defineComponent({
   }
 })
 
-async function mountRoleMenu(role: string) {
+// The role cell holds the only dropdown whose items are checkboxes.
+async function mountRoleMenuComponent(role: string) {
   rowState.original = { id: 'user-2', role }
   const wrapper = await mountSuspended(AdminUsersPage, {
     global: {
@@ -63,6 +64,11 @@ async function mountRoleMenu(role: string) {
     .find(m => (m.props('items') as { type?: string }[]).some(item => item.type === 'checkbox'))
   if (!menu)
     throw new Error('role menu not rendered')
+  return menu
+}
+
+async function mountRoleMenu(role: string) {
+  const menu = await mountRoleMenuComponent(role)
   const items = menu.props('items') as RoleMenuItem[]
   return (label: string) => {
     const found = items.find(i => i.label === label)
@@ -107,18 +113,8 @@ describe('admin users page role menu', () => {
 
 describe('admin users page role badge', () => {
   async function roleLabel(role: string) {
-    rowState.original = { id: 'user-2', role }
-    const wrapper = await mountSuspended(AdminUsersPage, {
-      global: {
-        stubs: {
-          AdminTable: AdminTableStub,
-          NuxtLayout: LayoutStub,
-          CreateUserModal: true,
-          BanUserModal: true
-        }
-      }
-    })
-    return wrapper.findComponent({ name: 'UButton' }).text()
+    const menu = await mountRoleMenuComponent(role)
+    return menu.findComponent({ name: 'UButton' }).text()
   }
 
   it('translates each role of a list and joins them', async () => {

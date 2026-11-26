@@ -126,9 +126,9 @@ describe('members page role badge', () => {
 
   it('joins the role labels of a member seen by a read-only viewer', async () => {
     memberState.viewerRole = 'member'
-    memberState.role = 'owner,admin'
+    memberState.role = 'admin,member'
 
-    expect(await badgeTexts()).toContain('Owner, Admin')
+    expect(await badgeTexts()).toContain('Admin, Member')
   })
 
   it('joins the role labels of an owner row seen by a manager', async () => {

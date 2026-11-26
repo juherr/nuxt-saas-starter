@@ -7,6 +7,10 @@ import BanUserModal from './components/BanUserModal.vue'
 import CreateUserModal from './components/CreateUserModal.vue'
 
 const { t, te } = useI18n()
+const { client, user: currentUser } = useAuth()
+const isUserModalOpen = ref(false)
+const isBanModalOpen = ref(false)
+const selectedUserId = ref('')
 
 // A user may hold several roles, stored as one comma-separated value: each
 // is translated, an unknown one shown as is rather than as a raw i18n key.
@@ -15,10 +19,6 @@ function roleLabels(role: string | null | undefined) {
     .map(value => te(`user.roles.${value}`) ? t(`user.roles.${value}`) : value)
     .join(', ')
 }
-const { client, user: currentUser } = useAuth()
-const isUserModalOpen = ref(false)
-const isBanModalOpen = ref(false)
-const selectedUserId = ref('')
 
 const filters: AdminTableFilter[] = reactive([
   {

@@ -82,6 +82,30 @@ server process**. It holds the sessions: keep it writable and persistent (a volu
 container); losing it signs every user out. Run a single instance with it; for
 several instances behind a load balancer, build with `REDIS_URL` so that they share sessions.
 
+### Expired entries with `fs-lite`
+
+The `fs-lite` driver ignores TTLs: it writes each entry to a file and never removes it when it
+expires. Sessions, their per-user lists and revocation markers (at most 7 days, Better Auth's
+default session lifetime, which `server/utils/auth.ts` does not change) and upload rate-limit
+counters (one per user and window, 1 minute by default) stay on disk after they expire, so
+`.data/kv` keeps growing. Reading them is harmless: Better Auth checks a session's own expiry,
+and an old rate-limit window is never read again.
+
+Redis honours the TTLs: build with `REDIS_URL` in production. With `fs-lite`, delete from a
+daily cron job the files that have not been written for longer than the longest TTL:
+
+```bash
+# from the server's working directory: files last written more than 7 full days ago
+find .data/kv -type f -mtime +7 -delete
+find .data/kv -mindepth 1 -type d -empty -delete
+```
+
+Every entry is rewritten with a TTL of at most 7 days, so a file older than that has expired;
+`-mtime +7` only matches files at least 8 days old, which leaves a day of margin. Should it
+still remove a live session, that user is only signed out: the database stays the source of
+truth. Raise the number if you set `session.expiresIn` above 7 days or an upload window longer
+than that.
+
 ### Uploads
 
 Uploads only serve avatars today, so the defaults are narrow:

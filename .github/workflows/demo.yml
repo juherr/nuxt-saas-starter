@@ -57,6 +57,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           cache: pnpm
+      - run: .github/scripts/check-node-version.sh
       # postinstall runs nuxt prepare.
       - run: pnpm install --frozen-lockfile
       - name: Generate migrations
@@ -98,6 +99,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           cache: pnpm
+      - run: .github/scripts/check-node-version.sh
       - run: pnpm install --frozen-lockfile
       # Before the build: the cloudflare-module preset merges the root
       # wrangler.jsonc into .output/server/wrangler.json, which is the file

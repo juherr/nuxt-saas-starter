@@ -5,7 +5,7 @@ import { renderSql } from './support/sql'
 
 const db = vi.hoisted(() => {
   const where = vi.fn(async (_condition: unknown) => [])
-  const selectWhere = vi.fn(async (_condition: unknown): Promise<{ id: string }[]> => [])
+  const selectWhere = vi.fn(async (_condition: unknown): Promise<({ id: string } | { image: string | null })[]> => [])
   const from = vi.fn(() => ({ where: selectWhere }))
   return { where, selectWhere, from, delete: vi.fn(() => ({ where })), select: vi.fn(() => ({ from })) }
 })
@@ -246,6 +246,154 @@ describe('the user delete hook', () => {
     try {
       await expect(options.databaseHooks.user.delete?.after?.({ id: 'user-1' }, null)).resolves.toBeUndefined()
       expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('user-1'), expect.any(Error))
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+})
+
+describe('the user update hook', () => {
+  const previousImage = 'https://files.example.test/avatar-old.png'
+  const newImage = 'https://files.example.test/avatar-new.png'
+  // better-auth passes the same endpoint context object to the before and
+  // the after hook of one update (db/with-hooks.mjs updateWithHooks).
+  const selfUpdate = () => ({ path: '/update-user', context: { session: { user: { id: 'user-1' } } } })
+
+  // Runs the before hook, then the after hook with the updated user, as
+  // updateWithHooks does.
+  async function updateUser(data: Record<string, unknown>, updated: Record<string, unknown>, context: unknown = selfUpdate()) {
+    const before = await options.databaseHooks.user.update.before(data, context)
+    const after = await options.databaseHooks.user.update.after(updated, context)
+    return { before, after }
+  }
+
+  beforeEach(() => {
+    db.select.mockClear()
+    db.from.mockClear()
+    db.selectWhere.mockReset()
+    db.selectWhere.mockResolvedValue([])
+    fileService.deleteFile.mockReset()
+    fileService.deleteFile.mockResolvedValue(true)
+    createFileService.mockReset()
+    createFileService.mockResolvedValue(fileService)
+  })
+
+  it('deletes the previous avatar file when the avatar is replaced', async () => {
+    db.selectWhere
+      .mockResolvedValueOnce([{ image: previousImage }])
+      .mockResolvedValueOnce([{ id: 'file-old' }])
+
+    const { before, after } = await updateUser({ image: newImage }, { id: 'user-1', image: newImage })
+
+    expect(before).toBeUndefined()
+    expect(after).toBeUndefined()
+    expect(db.from.mock.calls).toEqual([[schema.user], [schema.file]])
+    expect(renderSql(db.selectWhere.mock.calls[0]?.[0])).toMatchObject({ sql: '"user"."id" = $1', params: ['user-1'] })
+    // Only a file the user uploaded: another user's file at the same URL
+    // is never touched.
+    expect(renderSql(db.selectWhere.mock.calls[1]?.[0])).toMatchObject({
+      sql: '("file"."url" = $1 and "file"."uploaded_by" = $2)',
+      params: [previousImage, 'user-1']
+    })
+    expect(fileService.deleteFile.mock.calls).toEqual([['file-old', 'user-1']])
+  })
+
+  it('deletes the previous avatar file when the avatar is removed', async () => {
+    db.selectWhere
+      .mockResolvedValueOnce([{ image: previousImage }])
+      .mockResolvedValueOnce([{ id: 'file-old' }])
+
+    await updateUser({ image: '' }, { id: 'user-1', image: '' })
+
+    expect(fileService.deleteFile.mock.calls).toEqual([['file-old', 'user-1']])
+  })
+
+  it('keeps the file when the avatar is unchanged', async () => {
+    db.selectWhere.mockResolvedValueOnce([{ image: previousImage }])
+
+    await updateUser({ image: previousImage }, { id: 'user-1', image: previousImage })
+
+    expect(db.selectWhere).toHaveBeenCalledTimes(1)
+    expect(createFileService).not.toHaveBeenCalled()
+    expect(fileService.deleteFile).not.toHaveBeenCalled()
+  })
+
+  it('deletes nothing when the previous avatar is not a file the user uploaded', async () => {
+    db.selectWhere
+      .mockResolvedValueOnce([{ image: 'https://avatars.example.test/oauth.png' }])
+      .mockResolvedValueOnce([])
+
+    await updateUser({ image: newImage }, { id: 'user-1', image: newImage })
+
+    expect(createFileService).not.toHaveBeenCalled()
+    expect(fileService.deleteFile).not.toHaveBeenCalled()
+  })
+
+  it('does not read the user when the update carries no image', async () => {
+    // update-user passes `image: undefined` when the body has none.
+    await updateUser({ name: 'Ada', image: undefined }, { id: 'user-1', image: previousImage })
+
+    expect(db.select).not.toHaveBeenCalled()
+    expect(fileService.deleteFile).not.toHaveBeenCalled()
+  })
+
+  // An admin updates another user through /admin/update-user with the
+  // admin's session: the session user is not the updated user.
+  it('leaves the avatar file alone on updates other than the user\'s own', async () => {
+    const adminUpdate = { path: '/admin/update-user', context: { session: { user: { id: 'admin-1' } } } }
+
+    await updateUser({ image: newImage }, { id: 'user-1', image: newImage }, adminUpdate)
+
+    expect(db.select).not.toHaveBeenCalled()
+    expect(fileService.deleteFile).not.toHaveBeenCalled()
+  })
+
+  // The user row is already updated when the after hook runs: a cleanup
+  // failure must not turn it into an error.
+  it('keeps the update done when the previous file cannot be deleted', async () => {
+    db.selectWhere
+      .mockResolvedValueOnce([{ image: previousImage }])
+      .mockResolvedValueOnce([{ id: 'file-old' }])
+    fileService.deleteFile.mockRejectedValue(new Error('storage unavailable'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const { after } = await updateUser({ image: newImage }, { id: 'user-1', image: newImage })
+
+      expect(after).toBeUndefined()
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('file-old'), expect.any(Error))
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('keeps the update done when the file lookup fails', async () => {
+    db.selectWhere
+      .mockResolvedValueOnce([{ image: previousImage }])
+      .mockRejectedValueOnce(new Error('connection lost'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const { after } = await updateUser({ image: newImage }, { id: 'user-1', image: newImage })
+
+      expect(after).toBeUndefined()
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('user-1'), expect.any(Error))
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  // A failed read must not block the update itself.
+  it('lets the update through when the current avatar cannot be read', async () => {
+    db.selectWhere.mockRejectedValueOnce(new Error('connection lost'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const { before, after } = await updateUser({ image: newImage }, { id: 'user-1', image: newImage })
+
+      expect(before).toBeUndefined()
+      expect(after).toBeUndefined()
+      expect(fileService.deleteFile).not.toHaveBeenCalled()
     } finally {
       consoleError.mockRestore()
     }

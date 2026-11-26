@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copyright notice in `LICENSE` next to every other holder, and point funding and repository links
   (`NUXT_APP_REPO` default, site navigation) to this project
 - GitHub Actions are pinned to commit SHAs, with their version in a comment that Dependabot updates
+- Package scripts, including dependencies' build scripts, run in pnpm's built-in shell
+  (`shellEmulator`), so POSIX-style scripts behave the same on Windows
+  ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
 
 ### Removed
 
@@ -108,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sessions and rate-limit counters, recommends Redis in production, and gives a cron-able `find`
   command that clears them from `.data/kv`
   ([#134](https://github.com/juherr/nuxt-saas-starter/pull/134))
+
+### Security
+
+- `pnpm install` fails with `ERR_PNPM_TRUST_DOWNGRADE` when a package version has a lower trust
+  level (provenance, trusted publisher) than versions published before it, which can reveal a
+  compromised publish. This also applies to `pnpm install --frozen-lockfile` on versions already
+  in the lockfile. On that error, update the lockfile to a newer release of the package that
+  carries provenance; as a last resort, once the release is checked as legitimate, list its exact
+  `name@version` under `trustPolicyExclude` in `pnpm-workspace.yaml`
+  ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
 
 ## [0.1.0] - 2026-11-18
 

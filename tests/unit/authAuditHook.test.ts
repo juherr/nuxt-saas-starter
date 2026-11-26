@@ -36,10 +36,10 @@ async function afterHook() {
 
 // better-auth's adminMiddleware puts the caller's session on ctx.context
 // before the handler runs, so hooks.after sees it on success and failure.
-function removeUserRequest(sessionUserId: string, returned: unknown) {
+function removeUserRequest(sessionUserId: string, returned: unknown, body: unknown = { userId: 'u2' }) {
   return {
     path: '/admin/remove-user',
-    body: { userId: 'u2' },
+    body,
     headers: new Headers(),
     getHeader: () => undefined,
     context: {
@@ -82,6 +82,21 @@ describe('auditing an admin user removal', () => {
       action: '/admin/remove-user',
       targetType: 'user',
       targetId: 'u2',
+      status: 'failure'
+    }))
+  })
+
+  it('logs the rejected request when the user id cannot be stringified', async () => {
+    const after = await afterHook()
+    const body = JSON.parse('{"userId":{"toString":1}}')
+
+    await after(removeUserRequest('admin-1', new APIError('BAD_REQUEST'), body))
+
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'admin-1',
+      action: '/admin/remove-user',
+      targetType: 'user',
+      targetId: undefined,
       status: 'failure'
     }))
   })

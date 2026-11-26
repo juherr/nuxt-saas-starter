@@ -46,6 +46,16 @@ describe('resolveAuditTarget', () => {
       .toEqual({ targetType: 'user', targetId })
   })
 
+  // JSON can carry an object `String()` cannot convert: zod swallows the
+  // TypeError and rejects the body, so nothing is removed and nothing is targeted.
+  it.each([
+    [{ toString: 1 }],
+    [{ toString: 1, valueOf: 1 }]
+  ])('has no target id on /admin/remove-user when the user id %o cannot be stringified', (bodyUserId) => {
+    expect(resolveAuditTarget({ path: '/admin/remove-user', hasSession: true, sessionUserId: 'admin-1', bodyUserId }))
+      .toEqual({ targetType: 'user', targetId: undefined })
+  })
+
   it('has no target id on /admin/remove-user when the user id is missing', () => {
     expect(resolveAuditTarget({ path: '/admin/remove-user', hasSession: true, sessionUserId: 'admin-1', bodyUserId: undefined }))
       .toEqual({ targetType: 'user', targetId: undefined })

@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The French, Japanese and Chinese pages translate the dashboard link and the home page features
   instead of showing raw message keys, and a key missing from a locale now falls back to English
   ([#129](https://github.com/juherr/nuxt-saas-starter/pull/129))
+- A removed user, or a revoked session, loses access to the API routes at once instead of keeping
+  it for up to five minutes through the session cookie cache
+  ([#124](https://github.com/juherr/nuxt-saas-starter/pull/124))
 
 ## [0.1.0] - 2026-11-18
 

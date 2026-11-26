@@ -190,6 +190,7 @@ For example:
 | `runtimeConfig` key | Runtime variable |
 |---------------------|------------------|
 | `databaseUrl` | `NUXT_DATABASE_URL` |
+| `databaseConnectTimeoutMs` | `NUXT_DATABASE_CONNECT_TIMEOUT_MS` (default `10000`: a connection to PostgreSQL that takes longer fails instead of hanging; `create-admin.ts` reads it too) |
 | `betterAuthSecret` | `NUXT_BETTER_AUTH_SECRET` |
 | `resendApiKey` | `NUXT_RESEND_API_KEY` |
 | `public.appName` | `NUXT_PUBLIC_APP_NAME` |
@@ -282,7 +283,8 @@ the `admin` role. It reads `DATABASE_URL` (or `NUXT_DATABASE_URL`), `NUXT_ADMIN_
 node create-admin.ts        # Node.js 26 runs TypeScript directly
 ```
 
-Running it again for an existing email only sets the role and the verified flag.
+Running it again for an existing email only sets the role and the verified flag. It exits with code
+1 and prints what to fix when a variable is missing or the database cannot be reached.
 
 ---
 

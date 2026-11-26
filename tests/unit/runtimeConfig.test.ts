@@ -19,6 +19,7 @@ const BUILD_ENV = [
   'NUXT_GOOGLE_MAPS_API_KEY',
   'NUXT_REDIS_URL',
   'DATABASE_URL',
+  'NUXT_DATABASE_CONNECT_TIMEOUT_MS',
   'NUXT_APP_STORAGE',
   'NUXT_LOCAL_UPLOAD_DIR',
   'NUXT_LOCAL_PUBLIC_PATH',
@@ -139,6 +140,16 @@ describe('generateRuntimeConfig', () => {
     expect(config.fileManager.storage.provider).toBe('local')
     expect(config.fileManager.storage.r2.accountId).toBe('build-account')
     expect(config.public.payment).toBe('none')
+  })
+
+  it('bounds the database connection to 10 seconds by default', () => {
+    expect(generateRuntimeConfig().databaseConnectTimeoutMs).toBe(10000)
+  })
+
+  it('reads the database connect timeout at build time', () => {
+    vi.stubEnv('NUXT_DATABASE_CONNECT_TIMEOUT_MS', '2500')
+
+    expect(generateRuntimeConfig().databaseConnectTimeoutMs).toBe(2500)
   })
 
   it('declares the demo mode off when the flag is unset, so it can be set at runtime', () => {

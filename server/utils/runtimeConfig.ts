@@ -4,6 +4,7 @@ import type { FileManagerConfig, StorageProviderType } from '~~/server/services/
 import { config } from 'dotenv'
 // Relative: nuxt.config.ts imports this file before the `~~` alias exists.
 import { DEFAULT_ALLOWED_MIME_TYPES, DEFAULT_MAX_FILE_SIZE } from '../services/file/uploadPolicy'
+import { databaseConnectTimeoutMs } from './databaseConnectTimeout'
 
 declare module '@nuxt/schema' {
   interface RuntimeConfig {
@@ -49,6 +50,8 @@ export const generateRuntimeConfig = (preset = 'node-server', { appVersion = '' 
   // DB
   redisUrl: process.env.NUXT_REDIS_URL || '',
   databaseUrl: process.env.DATABASE_URL || '',
+  // pg connectionTimeoutMillis; runtime: NUXT_DATABASE_CONNECT_TIMEOUT_MS
+  databaseConnectTimeoutMs: databaseConnectTimeoutMs(process.env.NUXT_DATABASE_CONNECT_TIMEOUT_MS),
   // Access logs: `''` means `info` / `text` (see server/utils/accessLog.ts)
   logLevel: process.env.NUXT_LOG_LEVEL || '', // debug, info, warn or error
   logFormat: process.env.NUXT_LOG_FORMAT || '', // text or json

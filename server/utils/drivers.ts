@@ -3,6 +3,7 @@ import type { Hyperdrive } from '@cloudflare/workers-types'
 import { kv } from 'hub:kv'
 import pg from 'pg'
 import { Resend } from 'resend'
+import { databaseConnectTimeoutMs } from './databaseConnectTimeout'
 import { runtimeConfig } from './runtimeConfig'
 
 const getDatabaseUrl = () => {
@@ -21,7 +22,10 @@ const createPgPool = () => new pg.Pool({
   // A node-server process shares one pool. 90 connections from a single
   // process nearly exhausts PostgreSQL's default max_connections (100).
   max: 10,
-  idleTimeoutMillis: 30000
+  idleTimeoutMillis: 30000,
+  // Without it, pg waits forever on an unreachable database. A runtime
+  // override that does not parse arrives as a string: re-check it here.
+  connectionTimeoutMillis: databaseConnectTimeoutMs(runtimeConfig.databaseConnectTimeoutMs)
 })
 
 let pgPool: pg.Pool

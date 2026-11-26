@@ -15,7 +15,7 @@ import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlo
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
 import { ac, admin, member, owner } from '~~/shared/utils/permissions'
 import { userDisplayName } from '~~/shared/utils/userDisplayName'
-import { createdApiKeyId, isApiKeyManagerRole, parseRequestedOrganizationId } from './apiKeyMetadata'
+import { apiKeyPluginOptions } from './apiKeyOptions'
 import { deleteOrganizationApiKeys } from './apiKeyOrganization'
 import { logAuditEvent } from './auditLogger'
 import { AUDITED_SUCCESS_PATHS, resolveAuditTarget } from './authAudit'
@@ -237,59 +237,6 @@ async function refuseForeignSubscriptionUpgrade(ctx: AuthMiddlewareContext, refe
   })
   if (!isSubscriptionOwnedByReference(rows, referenceId)) {
     throw new APIError('NOT_FOUND')
-  }
-}
-
-/**
- * An API key belongs to the organization its metadata names, so only an
- * owner or admin of that organization may create it. Runs before the
- * endpoint validates its body. Anonymous callers get 401; a missing
- * organization, an id with surrounding whitespace (the key would store
- * it as sent), a non-member and a member with another role all get the
- * same 403. Server-side calls without a session are refused as well.
- */
-async function requireApiKeyCreationRights(ctx: AuthMiddlewareContext) {
-  const session = await getSessionFromCtx(ctx)
-  if (!session) {
-    throw new APIError('UNAUTHORIZED')
-  }
-  const forbidden = () => new APIError('FORBIDDEN', { message: 'You cannot create API keys for this organization' })
-  const organizationId = parseRequestedOrganizationId(ctx.body?.metadata)
-  if (!organizationId) {
-    throw forbidden()
-  }
-  const membership = await ctx.context.adapter.findOne<{ role: string }>({
-    model: 'member',
-    where: [
-      { field: 'organizationId', value: organizationId },
-      { field: 'userId', value: session.user.id }
-    ]
-  })
-  if (!isApiKeyManagerRole(membership?.role)) {
-    throw forbidden()
-  }
-}
-
-/**
- * Records the organization of a key the endpoint just created. The
- * creation and this insert are not one transaction. When the insert
- * fails, the answer becomes an error so the plaintext key never reaches
- * the client: the key row stays unlisted and no one holds its plaintext, which
- * fails closed. `returned` carries the plaintext key: read its id only,
- * and never log or serialize it.
- */
-async function linkCreatedApiKey(ctx: AuthMiddlewareContext) {
-  const apiKeyId = createdApiKeyId(ctx.context.returned)
-  const organizationId = parseRequestedOrganizationId(ctx.body?.metadata)
-  if (!apiKeyId || !organizationId) {
-    return
-  }
-  try {
-    await getDB().insert(schema.apiKeyOrganization).values({ apiKeyId, organizationId })
-  } catch (error) {
-    // The insert holds ids only, so its error cannot carry the plaintext.
-    console.error(`Failed to link API key ${apiKeyId} to its organization:`, error)
-    throw new APIError('INTERNAL_SERVER_ERROR', { message: 'The API key could not be created' })
   }
 }
 
@@ -659,9 +606,6 @@ export const createBetterAuth = () => betterAuth({
         await refuseForeignSubscriptionUpgrade(ctx, resolveUpgradeReferenceId(ctx, session))
         return checkoutSeatsOverride(ctx, session)
       }
-      if (ctx.path === '/api-key/create') {
-        await requireApiKeyCreationRights(ctx)
-      }
       return undefined
     }),
     after: createAuthMiddleware(async (ctx) => {
@@ -724,9 +668,6 @@ export const createBetterAuth = () => betterAuth({
           })
         }
       }
-      if (ctx.path === '/api-key/create') {
-        await linkCreatedApiKey(ctx)
-      }
     })
   },
   plugins: [
@@ -775,14 +716,7 @@ export const createBetterAuth = () => betterAuth({
         }
       }
     }),
-    apiKey({
-      enableMetadata: true,
-      schema: {
-        apikey: {
-          modelName: 'apiKey'
-        }
-      }
-    }),
+    apiKey(apiKeyPluginOptions),
     // Billing is optional: without a Stripe secret key the app runs without it.
     // auth:schema keeps the plugin so the generated schema stays complete.
     ...(isStripeConfigured() || isAuthSchemaCommand ? [setupStripe()] : [])

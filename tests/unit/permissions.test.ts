@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 import type { OrgRole } from '~~/shared/utils/permissions'
 import { describe, expect, it } from 'vitest'
-import { isApiKeyManagerRole } from '~~/server/utils/apiKeyMetadata'
 import {
+  admin,
+  API_KEY_MANAGER_ROLES,
   hasPermission,
   hasRole,
   isAdminOrOwner,
   isOwner,
   isSystemAdmin,
+  member,
+  owner,
   parseRoles,
   toggleOrgRole
 } from '~~/shared/utils/permissions'
@@ -133,15 +136,18 @@ describe('isAdminOrOwner', () => {
   })
 })
 
-// apiKeyMetadata.ts stays import-free for the plain-Node backfill script,
-// so it carries its own copy of the role-list parse: keep both in step.
-describe('isApiKeyManagerRole matches hasRole', () => {
-  it.each(['owner', 'admin', 'member', 'owner,admin', 'admin, owner', 'admin,member', 'Owner', 'Admin', '', ',,', null, undefined])(
-    'agrees on %j',
-    (role) => {
-      expect(isApiKeyManagerRole(role)).toBe(hasRole(role, ['owner', 'admin']))
+// The project routes check API_KEY_MANAGER_ROLES, the API key plugin
+// checks the `apiKey` grants of `ac`: both must name the same roles.
+describe('the API key manager roles match the apiKey grants', () => {
+  const roles = { owner, admin, member }
+  const actions = ['create', 'read', 'update', 'delete'] as const
+
+  it.each(Object.keys(roles) as (keyof typeof roles)[])('agrees on %s for every action', (role) => {
+    for (const action of actions) {
+      expect(roles[role].authorize({ apiKey: [action] }).success, action)
+        .toBe(hasRole(role, API_KEY_MANAGER_ROLES))
     }
-  )
+  })
 })
 
 describe('toggleOrgRole', () => {

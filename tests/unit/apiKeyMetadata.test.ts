@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT
-import { APIError } from 'better-auth/api'
 import { describe, expect, it } from 'vitest'
 import {
-  createdApiKeyId,
   isApiKeyManagerRole,
-  parseLegacyOrganizationId,
-  parseRequestedOrganizationId
+  parseLegacyOrganizationId
 } from '~~/server/utils/apiKeyMetadata'
 
 describe('parseLegacyOrganizationId', () => {
@@ -43,31 +40,6 @@ describe('parseLegacyOrganizationId', () => {
   })
 })
 
-describe('parseRequestedOrganizationId', () => {
-  it.each([
-    ['an already parsed object', { organizationId: 'org-1' }, 'org-1'],
-    ['a JSON object string', JSON.stringify({ organizationId: 'org-1' }), 'org-1'],
-    ['a double-encoded JSON string', JSON.stringify(JSON.stringify({ organizationId: 'org-12' })), 'org-12']
-  ])('reads the organization id from %s', (_label, metadata, expected) => {
-    expect(parseRequestedOrganizationId(metadata)).toBe(expected)
-  })
-
-  it.each([
-    ['a leading space', { organizationId: ' org-1' }],
-    ['a trailing space', { organizationId: 'org-1 ' }],
-    ['a trailing newline', { organizationId: 'org-1\n' }],
-    ['surrounding spaces in a JSON string', JSON.stringify({ organizationId: ' org-1 ' })],
-    ['an empty organizationId', { organizationId: '' }],
-    ['a whitespace organizationId', { organizationId: '   ' }],
-    ['a numeric organizationId', { organizationId: 1 }],
-    ['no organizationId', { label: 'org-1' }],
-    ['no metadata', undefined],
-    ['a non-JSON string', 'not json']
-  ])('refuses an organization id with %s, which would not match the stored metadata', (_label, metadata) => {
-    expect(parseRequestedOrganizationId(metadata)).toBeNull()
-  })
-})
-
 describe('isApiKeyManagerRole', () => {
   it.each([
     ['the role', 'owner'],
@@ -87,27 +59,5 @@ describe('isApiKeyManagerRole', () => {
     ['a role list of differently cased roles', 'Owner,Admin']
   ])('refuses %s', (_label, role) => {
     expect(isApiKeyManagerRole(role)).toBe(false)
-  })
-})
-
-describe('createdApiKeyId', () => {
-  it('reads the id of a created key', () => {
-    expect(createdApiKeyId({ id: 'key-1', key: 'plaintext', name: 'ci' })).toBe('key-1')
-  })
-
-  it('ignores an error answer, whatever it carries', () => {
-    const error = Object.assign(new APIError('BAD_REQUEST'), { id: 'key-1' })
-    expect(createdApiKeyId(error)).toBeNull()
-  })
-
-  it.each([
-    ['nothing', undefined],
-    ['null', null],
-    ['an object without id', { key: 'plaintext' }],
-    ['a blank id', { id: '' }],
-    ['a numeric id', { id: 1 }],
-    ['a string', 'key-1']
-  ])('ignores %s', (_label, returned) => {
-    expect(createdApiKeyId(returned)).toBeNull()
   })
 })

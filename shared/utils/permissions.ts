@@ -9,7 +9,9 @@ const statement = {
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
   billing: ['manage', 'view'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  // Organization-owned API keys (@better-auth/api-key, references: 'organization')
+  apiKey: ['create', 'read', 'update', 'delete']
 } as const
 
 export const ac = createAccessControl(statement)
@@ -24,7 +26,8 @@ export const admin = ac.newRole({
   organization: ['update', 'view', 'leave'],
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  apiKey: ['create', 'read', 'update', 'delete']
 })
 
 export const owner = ac.newRole({
@@ -32,8 +35,17 @@ export const owner = ac.newRole({
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
   billing: ['manage', 'view'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  apiKey: ['create', 'read', 'update', 'delete']
 })
+
+/**
+ * Organization roles that may create, list and revoke the organization's
+ * API keys: the roles granted `apiKey` above (a test keeps them equal).
+ * A role list such as `member,admin` counts when it holds one of them;
+ * another casing (`Admin`) does not.
+ */
+export const API_KEY_MANAGER_ROLES = ['owner', 'admin'] as const
 
 // ============================================
 // ROLE DEFINITIONS

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { H3Event } from 'h3'
-import { API_KEY_MANAGER_ROLES } from './apiKeyMetadata'
+import { API_KEY_MANAGER_ROLES } from '~~/shared/utils/permissions'
 import { requireOrganizationRole } from './billing'
 
 /**

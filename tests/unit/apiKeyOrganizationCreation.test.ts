@@ -54,6 +54,7 @@ describe('creating an organization API key through the plugin', () => {
   let auth: Auth
   let organizationId: string
   let callers: Record<'owner' | 'admin' | 'member' | 'outsider', Headers>
+  let ownerId: string
 
   beforeAll(async () => {
     auth = createAuth()
@@ -61,6 +62,7 @@ describe('creating an organization API key through the plugin', () => {
     const adminUser = await signUp(auth, 'admin')
     const memberUser = await signUp(auth, 'member')
     const outsider = await signUp(auth, 'outsider')
+    ownerId = ownerUser.userId
     const created = await auth.api.createOrganization({
       body: { name: 'Acme', slug: 'acme' },
       headers: ownerUser.headers
@@ -109,5 +111,23 @@ describe('creating an organization API key through the plugin', () => {
       body: { name: 'orphan-key' },
       headers: callers.owner
     }))).toBe(400)
+  })
+
+  // Over HTTP the plugin rejects a body `userId`: without that guard, an
+  // anonymous request naming the owner would create a key on their behalf.
+  it('refuses an HTTP request without a session that names a user with 401', async () => {
+    const response = await auth.handler(new Request('http://localhost:3000/api/auth/api-key/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'origin': 'http://localhost:3000' },
+      body: JSON.stringify({ name: 'anonymous-key', organizationId, userId: ownerId })
+    }))
+
+    expect(response.status).toBe(401)
+  })
+
+  it('refuses a server-side call with neither a session nor a user with 401', async () => {
+    expect(await statusOf(auth.api.createApiKey({
+      body: { name: 'sessionless-key', organizationId }
+    }))).toBe(401)
   })
 })

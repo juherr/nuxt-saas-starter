@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cookies refreshed while a page renders on the server, such as the session cache set by
   `get-session`, now reach the browser and the later requests of the same render
   ([#131](https://github.com/juherr/nuxt-saas-starter/pull/131))
+- Resending the verification email no longer claims an email was sent when delivery failed: the
+  sign-in page shows a neutral message, and the server logs the failure as an error
+  ([#128](https://github.com/juherr/nuxt-saas-starter/pull/128))
 
 ## [0.1.0] - 2026-11-18
 

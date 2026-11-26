@@ -85,7 +85,10 @@ describe('sign-in page', () => {
     expect(document.getElementById(descriptionId!)?.textContent?.trim()).toBe('signIn.emailNotVerifiedDesc')
   })
 
-  it('closes the dialog once its own resend request completes', async () => {
+  // The server answers the same way whether or not an email went out (no
+  // account enumeration, delivery failures swallowed), so the copy must not
+  // claim that one was sent.
+  it('closes the dialog with a neutral message once its own resend request completes', async () => {
     signInEmail.mockResolvedValue(notVerified)
     sendVerificationEmail.mockResolvedValue({ data: { status: true }, error: null })
 
@@ -93,8 +96,20 @@ describe('sign-in page', () => {
     await vi.waitFor(() => expect(dialog()).not.toBeNull())
     dialogButton('signIn.sendEmail').click()
 
-    await vi.waitFor(() => expect(toastAdd).toHaveBeenCalledWith({ title: 'signIn.sendEmailSuccess', color: 'success' }))
+    await vi.waitFor(() => expect(toastAdd).toHaveBeenCalledWith({ title: 'signIn.resendEmailNeutral', color: 'success' }))
+    expect(toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'signIn.sendEmailSuccess' }))
     await vi.waitFor(() => expect(dialog()).toBeNull())
+  })
+
+  it('toasts a resend request error', async () => {
+    signInEmail.mockResolvedValue(notVerified)
+    sendVerificationEmail.mockResolvedValue({ data: null, error: { status: 429, message: 'Too many requests' } })
+
+    await submit(await mount())
+    await vi.waitFor(() => expect(dialog()).not.toBeNull())
+    dialogButton('signIn.sendEmail').click()
+
+    await vi.waitFor(() => expect(toastAdd).toHaveBeenCalledWith({ title: 'Too many requests', color: 'error' }))
   })
 
   it('ignores a resend that completes after the dialog was reopened for another account', async () => {

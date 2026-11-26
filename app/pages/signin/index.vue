@@ -122,7 +122,7 @@ async function handleResendEmail() {
     })
   } else {
     toast.add({
-      title: t('signIn.sendEmailSuccess'),
+      title: t('signIn.resendEmailNeutral'),
       color: 'success'
     })
   }

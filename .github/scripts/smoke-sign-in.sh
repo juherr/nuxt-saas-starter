@@ -28,7 +28,10 @@ status=$(curl -sS -o "$label-body.txt" -D "$label-headers.txt" \
   -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
-  -d "$body")
+  -d "$body") || {
+  echo "::error::$label sign-in request failed"
+  exit 1
+}
 echo "$label status: $status"
 
 # On failure no session exists, so the headers and body hold nothing

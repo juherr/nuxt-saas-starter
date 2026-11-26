@@ -54,7 +54,8 @@ for variant in referer typed foreign; do
     head -c 500 "ssr-org-$variant.json"; echo
     fail "creating organization $slug answered $status"
   fi
-  org_ids[$variant]=$(jq -er .id "ssr-org-$variant.json")
+  org_ids[$variant]=$(jq -er .id "ssr-org-$variant.json") \
+    || fail "no id in ssr-org-$variant.json"
 done
 
 # No -L: a refused set-active redirects to another organization, so only
@@ -100,6 +101,8 @@ before=$(grep -c 'HTTP/' foreign-host.log || true)
 [ "$before" -ge 1 ] || fail "the foreign-host listener logged no liveness request"
 check_page foreign -H "Referer: $NUXT_APP_URL/" \
   -H "Host: $foreign" -H "X-Forwarded-Host: $foreign"
+# Let a fire-and-forget outbound request reach the listener before counting.
+sleep 1
 after=$(grep -c 'HTTP/' foreign-host.log || true)
 if [ "$after" != "$before" ]; then
   cat foreign-host.log
@@ -107,6 +110,8 @@ if [ "$after" != "$before" ]; then
 fi
 
 # Codes of better-auth's origin check (api/middlewares/origin-check.mjs).
+# grep exits 2 on a missing file, which `if` would read as "no match".
+[ -s server.log ] || fail "server.log is missing or empty"
 if grep -E 'setActive failed|MISSING_OR_NULL_ORIGIN|INVALID_ORIGIN' server.log; then
   fail "server.log shows a refused set-active"
 fi

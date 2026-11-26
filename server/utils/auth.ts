@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 import type { H3Event } from 'h3'
-import type { FileService } from '~~/server/services/file/fileService'
 import type { DemoRequest } from '~~/shared/utils/demoMode'
 import type { User } from '~~/shared/utils/types'
 import { apiKey } from '@better-auth/api-key'
@@ -38,35 +37,37 @@ const isAuthSchemaCommand = process.argv.some(arg => arg.includes('server/db/sch
 const emailSender = () => `${runtimeConfig.public.appName} <${runtimeConfig.public.appNotifyEmail}>`
 
 /**
+ * Deletes each file as `actorId`. A failure to delete one file is logged,
+ * with `describe(id)` naming it, and the others are still deleted;
+ * deleteFile keeps the row and audits the failure, so the stored object can
+ * be cleaned up later. The file service is built only when there is
+ * something to delete, so a missing storage configuration does not get in
+ * the way when the list is empty; a failure to build it is thrown.
+ */
+async function deleteFilesQuietly(fileIds: string[], actorId: string, describe: (id: string) => string) {
+  if (!fileIds.length) {
+    return
+  }
+  const fileService = await createFileService()
+  for (const id of fileIds) {
+    try {
+      await fileService.deleteFile(id, actorId)
+    } catch (error) {
+      console.error(`[Auth] Failed to delete ${describe(id)}:`, error)
+    }
+  }
+}
+
+/**
  * Deletes every file `userId` uploaded, active or not: file.uploaded_by has
- * no foreign key to user. A failure to delete one file is logged and the
- * others are still deleted; deleteFile keeps the row and audits the failure, so the stored
- * object can be cleaned up later. The file service is built only when there
- * is something to delete, so a missing storage configuration does not stop
- * deleting a user who never uploaded anything.
+ * no foreign key to user.
  */
 async function deleteUploadedFiles(userId: string, actorId: string) {
   const files = await getDB()
     .select({ id: schema.file.id })
     .from(schema.file)
     .where(eq(schema.file.uploadedBy, userId))
-  if (!files.length) {
-    return
-  }
-  let fileService: FileService
-  try {
-    fileService = await createFileService()
-  } catch (error) {
-    console.error(`[Auth] Cannot delete the ${files.length} files of user ${userId}:`, error)
-    return
-  }
-  for (const { id } of files) {
-    try {
-      await fileService.deleteFile(id, actorId)
-    } catch (error) {
-      console.error(`[Auth] Failed to delete file ${id} of user ${userId}:`, error)
-    }
-  }
+  await deleteFilesQuietly(files.map(({ id }) => id), actorId, id => `file ${id} of user ${userId}`)
 }
 
 /**
@@ -406,7 +407,7 @@ export const createBetterAuth = () => betterAuth({
           try {
             await deleteUploadedFiles(user.id, context?.context.session?.user.id ?? user.id)
           } catch (error) {
-            console.error(`[Auth] Cannot list the files of deleted user ${user.id}:`, error)
+            console.error(`[Auth] Cannot delete the files of deleted user ${user.id}:`, error)
           }
         }
       }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it } from 'vitest'
-import { applySsrCookie, captureSetCookies, ssrCookieHeader, ssrCookieHeaders, ssrCookiePort, ssrFetchHooks } from '~~/app/utils/ssrCookies'
+import { applySsrCookie, captureSetCookies, ssrCookieHeader, ssrCookiePort, ssrFetchHooks } from '~~/app/utils/ssrCookies'
 import { fakeEvent, responseWith } from './support/ssrCookieEvent'
 
 const FUTURE = 'Wed, 21 Oct 2037 07:28:00 GMT'
@@ -174,23 +174,6 @@ describe('ssrCookies', () => {
 
       expect(ssrCookieHeader(first.event)).toBe('a=2')
       expect(ssrCookieHeader(second.event)).toBe('a=1')
-    })
-  })
-
-  describe('ssrCookieHeaders', () => {
-    it('returns no header without an event, like useRequestHeaders in the browser', () => {
-      expect(ssrCookieHeaders(undefined)).toEqual({})
-    })
-
-    it('returns no header when the merged cookie is empty', () => {
-      expect(ssrCookieHeaders(fakeEvent().event)).toEqual({})
-    })
-
-    it('returns the merged cookie under a lowercase key', () => {
-      const { event } = fakeEvent('a=1')
-      captureSetCookies(event, responseWith('b=2'))
-
-      expect(ssrCookieHeaders(event)).toEqual({ cookie: 'a=1; b=2' })
     })
   })
 

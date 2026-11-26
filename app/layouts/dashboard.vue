@@ -179,8 +179,7 @@ const checkSlug = useDebounceFn(async (slug: string) => {
   isCheckingSlug.value = true
   try {
     const { available } = await $fetch('/api/organization/check-slug', {
-      query: { slug },
-      headers: useSsrCookieHeaders()
+      query: { slug }
     })
     if (!available) {
       slugError.value = 'Slug is already taken'

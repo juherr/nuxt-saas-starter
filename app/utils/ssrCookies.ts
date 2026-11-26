@@ -219,15 +219,6 @@ export function applySsrCookie(event: SsrCookieEvent, headers: Headers): void {
     headers.delete('cookie')
 }
 
-/**
- * Headers for an SSR `$fetch` to the app's own API, in place of `useRequestHeaders(['cookie'])`.
- * Without an event (in the browser) it returns no header, as `useRequestHeaders` does there.
- */
-export function ssrCookieHeaders(event: SsrCookieEvent | undefined): Record<string, string> {
-  const cookie = event ? ssrCookieHeader(event) : undefined
-  return cookie ? { cookie } : {}
-}
-
 /** The `$fetch`/`useFetch` hooks of an SSR call to the app's own API; an ofetch context satisfies them. */
 export interface SsrFetchHooks {
   onRequest?: (context: { options: { headers: Headers } }) => void

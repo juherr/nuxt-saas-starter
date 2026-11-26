@@ -17,6 +17,8 @@ export const describeWithPostgres = describe.skipIf(!adminUrl && !inCi)
 
 export interface TestDatabase {
   client: pg.Client
+  /** Connection URL of this database, for more connections. */
+  url: string
   /** Drops every table, leaving an empty public schema. */
   reset: () => Promise<void>
   drop: () => Promise<void>
@@ -42,6 +44,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 
   return {
     client,
+    url: url.toString(),
     reset: async () => {
       await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public')
     },

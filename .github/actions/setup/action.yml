@@ -15,6 +15,10 @@ runs:
   using: composite
   steps:
     - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+      with:
+        # Dependabot does not bump this input: bump it by hand with the
+        # action (also in .github/workflows/demo.yml).
+        version: 2026.11.14
     - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:

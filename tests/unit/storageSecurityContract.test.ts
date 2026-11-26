@@ -151,4 +151,28 @@ describe('Local and S3-compatible storage pass the same security contract', () =
       })
     })
   })
+
+  it('refuses an upload to S3 storage without a public URL before any S3 request', async () => {
+    const requests: Request[] = []
+    vi.stubGlobal('fetch', vi.fn(async (request: Request) => {
+      requests.push(request)
+      return new Response(null, { status: 200 })
+    }))
+    const provider = new S3CompatibleStorageProvider({
+      provider: 's3',
+      accessKeyId: 'test-key',
+      secretAccessKey: 'test-secret',
+      bucketName: 'bucket',
+      endpoint: 'https://storage.test',
+      publicUrl: ''
+    })
+
+    await expect(new FileService(provider).uploadFile(Buffer.from('data'), 'photo.png', PNG, 'u1'))
+      .rejects
+      .toMatchObject({
+        statusCode: 503,
+        message: expect.stringContaining('NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL')
+      })
+    expect(requests).toEqual([])
+  })
 })

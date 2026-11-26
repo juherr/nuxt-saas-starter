@@ -2,7 +2,7 @@
 <i18n src="./i18n.json"></i18n>
 
 <script setup lang="ts">
-import { hasRole, parseOrgRoles, toggleOrgRole } from '~~/shared/utils/permissions'
+import { hasRole, isSystemAdmin, parseRoles, toggleOrgRole } from '~~/shared/utils/permissions'
 import BanUserModal from './components/BanUserModal.vue'
 import CreateUserModal from './components/CreateUserModal.vue'
 
@@ -110,7 +110,7 @@ const getRoleDropdownItems = (original: User) => {
       type: 'checkbox' as const,
       checked: hasRole(original.role, role),
       onUpdateChecked: async (checked: boolean) => {
-        const next = toggleOrgRole(parseOrgRoles(original.role), role, checked)
+        const next = toggleOrgRole(parseRoles(original.role), role, checked)
         // A user keeps at least one role: the last one cannot be unchecked.
         if (next.length === 0)
           return
@@ -233,7 +233,7 @@ const fetchData: FetchDataFn<User> = async ({ page, limit, sort, filter }) => {
           arrow
         >
           <UButton
-            :color="hasRole(original.role, 'admin') ? 'primary' : 'neutral'"
+            :color="isSystemAdmin(original.role) ? 'primary' : 'neutral'"
             variant="outline"
             size="xs"
             icon="i-lucide-chevron-down"

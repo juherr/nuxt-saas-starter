@@ -159,34 +159,35 @@ export const PERMISSIONS = {
 // ============================================
 
 /**
- * Reads a member's stored organization role into its roles. better-auth
- * keeps several roles in one comma-separated value (`owner,admin`):
- * entries are trimmed and empty ones dropped. Casing is kept, so `Owner`
- * matches no role.
+ * Reads a stored role into its roles: the global user role (`user,admin`)
+ * and an organization member role (`owner,admin`) alike, since better-auth
+ * keeps several roles in one comma-separated value. Entries are trimmed and
+ * empty ones dropped. Casing is kept, so `Owner` matches no role.
  */
-export function parseOrgRoles(role: string | null | undefined): string[] {
+export function parseRoles(role: string | null | undefined): string[] {
   if (!role)
     return []
   return role.split(',').map(entry => entry.trim()).filter(entry => entry !== '')
 }
 
 /**
- * Whether a stored role, a single role or a comma-separated role list
- * (better-auth keeps several roles that way, `user,admin`), holds `wanted`.
+ * Whether a stored role, a single role or a comma-separated role list,
+ * holds `wanted`, or at least one entry of `wanted` when it is a list.
  * Casing must match, so `Admin` is not `admin`.
  */
-export function hasRole(role: string | null | undefined, wanted: string): boolean {
-  return parseOrgRoles(role).includes(wanted)
+export function hasRole(role: string | null | undefined, wanted: string | readonly string[]): boolean {
+  const roles = parseRoles(role)
+  if (typeof wanted === 'string')
+    return roles.includes(wanted)
+  return roles.some(entry => wanted.includes(entry))
 }
 
 /**
- * Whether a member's stored role, a single role or a role list, holds at
- * least one of `roles`. Casing must match.
+ * Whether a user's global role (`user.role`, not an organization member
+ * role) makes them a system administrator.
  */
-export function hasOrgRole(role: string | null | undefined, roles: readonly OrgRole[]): boolean {
-  // Widened for the lookup only: stored entries are unchecked strings.
-  const wanted: readonly string[] = roles
-  return parseOrgRoles(role).some(entry => wanted.includes(entry))
+export function isSystemAdmin(role: string | null | undefined): boolean {
+  return hasRole(role, 'admin')
 }
 
 /**
@@ -196,7 +197,7 @@ export function hasPermission(
   userRole: string | null | undefined,
   permission: keyof typeof PERMISSIONS
 ): boolean {
-  return hasOrgRole(userRole, PERMISSIONS[permission])
+  return hasRole(userRole, PERMISSIONS[permission])
 }
 
 /**
@@ -231,14 +232,14 @@ export function canDeleteOrganization(role: string | null | undefined): boolean 
  * Check if user is owner
  */
 export function isOwner(role: string | null | undefined): boolean {
-  return hasOrgRole(role, ['owner'])
+  return hasRole(role, ['owner'])
 }
 
 /**
  * Check if user is admin or owner
  */
 export function isAdminOrOwner(role: string | null | undefined): boolean {
-  return hasOrgRole(role, ['owner', 'admin'])
+  return hasRole(role, ['owner', 'admin'])
 }
 
 /**

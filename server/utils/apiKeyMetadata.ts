@@ -60,7 +60,7 @@ function readOrganizationIdField(metadata: unknown): unknown {
 export const API_KEY_MANAGER_ROLES = ['owner', 'admin'] as const
 
 export function isApiKeyManagerRole(role: string | null | undefined): boolean {
-  // Same parse as hasOrgRole in shared/utils/permissions.ts, which this
+  // Same parse as hasRole in shared/utils/permissions.ts, which this
   // module cannot import (see the top of the file); a test keeps them equal.
   if (typeof role !== 'string')
     return false

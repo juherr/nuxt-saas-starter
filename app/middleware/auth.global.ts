@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { defu } from 'defu'
-import { hasRole } from '~~/shared/utils/permissions'
+import { isSystemAdmin } from '~~/shared/utils/permissions'
 
 type MiddlewareOptions = false | {
   /**
@@ -68,7 +68,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Admin Pages
   const routeBaseName = useRouteBaseName()
   const routeName = routeBaseName(to)
-  if (typeof routeName === 'string' && routeName.startsWith('admin') && !hasRole(user.value?.role, 'admin')) {
+  if (typeof routeName === 'string' && routeName.startsWith('admin') && !isSystemAdmin(user.value?.role)) {
     return navigateTo(localePath('/403'))
   }
   if (routeName == 'admin') {

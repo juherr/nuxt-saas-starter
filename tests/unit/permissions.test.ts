@@ -3,16 +3,16 @@ import type { OrgRole } from '~~/shared/utils/permissions'
 import { describe, expect, it } from 'vitest'
 import { isApiKeyManagerRole } from '~~/server/utils/apiKeyMetadata'
 import {
-  hasOrgRole,
   hasPermission,
   hasRole,
   isAdminOrOwner,
   isOwner,
-  parseOrgRoles,
+  isSystemAdmin,
+  parseRoles,
   toggleOrgRole
 } from '~~/shared/utils/permissions'
 
-describe('parseOrgRoles', () => {
+describe('parseRoles', () => {
   it.each([
     ['a single role', 'owner', ['owner']],
     ['a role list', 'owner,admin', ['owner', 'admin']],
@@ -22,22 +22,22 @@ describe('parseOrgRoles', () => {
     ['separators only', ',,', []],
     ['empty entries between roles', 'admin,,member,', ['admin', 'member']]
   ])('reads %s', (_label, role, expected) => {
-    expect(parseOrgRoles(role)).toEqual(expected)
+    expect(parseRoles(role)).toEqual(expected)
   })
 
   it.each([null, undefined])('reads no role from %s', (role) => {
-    expect(parseOrgRoles(role)).toEqual([])
+    expect(parseRoles(role)).toEqual([])
   })
 })
 
-describe('hasOrgRole', () => {
+describe('hasRole with a list of wanted roles', () => {
   it.each([
     ['owner', ['owner']],
     ['owner,admin', ['owner']],
     ['admin, owner', ['owner']],
     ['admin,member', ['owner', 'admin']]
   ] satisfies [string, OrgRole[]][])('accepts "%s" for %j', (role, roles) => {
-    expect(hasOrgRole(role, roles)).toBe(true)
+    expect(hasRole(role, roles)).toBe(true)
   })
 
   it.each([
@@ -50,11 +50,11 @@ describe('hasOrgRole', () => {
     [undefined, ['owner']],
     ['owner', []]
   ] satisfies [string | null | undefined, OrgRole[]][])('refuses %j for %j', (role, roles) => {
-    expect(hasOrgRole(role, roles)).toBe(false)
+    expect(hasRole(role, roles)).toBe(false)
   })
 })
 
-describe('hasRole', () => {
+describe('hasRole with one wanted role', () => {
   it.each([
     ['a single role', 'admin'],
     ['a role list', 'admin,user'],
@@ -76,6 +76,26 @@ describe('hasRole', () => {
     ['undefined', undefined]
   ])('does not find admin in %s', (_label, role) => {
     expect(hasRole(role, 'admin')).toBe(false)
+  })
+})
+
+describe('isSystemAdmin', () => {
+  it.each([
+    ['a single role', 'admin'],
+    ['a role list', 'user,admin'],
+    ['a role list with spaces', 'user, admin']
+  ])('recognises %s', (_label, role) => {
+    expect(isSystemAdmin(role)).toBe(true)
+  })
+
+  it.each([
+    ['a differently cased role', 'Admin'],
+    ['another role', 'user'],
+    ['null', null],
+    ['undefined', undefined],
+    ['an empty string', '']
+  ])('does not recognise %s', (_label, role) => {
+    expect(isSystemAdmin(role)).toBe(false)
   })
 })
 
@@ -115,11 +135,11 @@ describe('isAdminOrOwner', () => {
 
 // apiKeyMetadata.ts stays import-free for the plain-Node backfill script,
 // so it carries its own copy of the role-list parse: keep both in step.
-describe('isApiKeyManagerRole matches hasOrgRole', () => {
+describe('isApiKeyManagerRole matches hasRole', () => {
   it.each(['owner', 'admin', 'member', 'owner,admin', 'admin, owner', 'admin,member', 'Owner', 'Admin', '', ',,', null, undefined])(
     'agrees on %j',
     (role) => {
-      expect(isApiKeyManagerRole(role)).toBe(hasOrgRole(role, ['owner', 'admin']))
+      expect(isApiKeyManagerRole(role)).toBe(hasRole(role, ['owner', 'admin']))
     }
   )
 })

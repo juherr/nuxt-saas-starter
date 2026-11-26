@@ -7,7 +7,7 @@ import { member as memberTable, organization as organizationTable, subscription 
 import { getAuthSession } from '~~/server/utils/auth'
 import { useDB } from '~~/server/utils/db'
 import { createStripeClient } from '~~/server/utils/stripe'
-import { hasOrgRole } from '~~/shared/utils/permissions'
+import { hasRole } from '~~/shared/utils/permissions'
 
 type Database = Awaited<ReturnType<typeof useDB>>
 
@@ -70,7 +70,7 @@ export async function requireOrganizationRole(
     )
   })
 
-  if (!member || (roles && !hasOrgRole(member.role, roles))) {
+  if (!member || (roles && !hasRole(member.role, roles))) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   }
 

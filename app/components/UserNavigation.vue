@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: MIT -->
 <script setup lang="ts">
-import { hasRole } from '~~/shared/utils/permissions'
+import { isSystemAdmin } from '~~/shared/utils/permissions'
 import { getPlanKeyFromId, PLAN_TIERS } from '~~/shared/utils/plans'
 
 const localePath = useLocalePath()
@@ -50,7 +50,7 @@ const tierBadgeLabel = computed(() => {
       </UButton>
     </UDropdownMenu>
     <UButton
-      v-if="hasRole(user?.role, 'admin')"
+      v-if="isSystemAdmin(user?.role)"
       variant="outline"
       color="neutral"
       class="flex items-center gap-2"

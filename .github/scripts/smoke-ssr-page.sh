@@ -7,7 +7,9 @@
 # typed URL (no Origin, no Referer, Sec-Fetch-Site: none, the only path
 # where the SSR auth client injects the configured origin), and once with
 # a foreign Host / X-Forwarded-Host, which must not make the server call
-# that host.
+# that host. Then it checks that a cross-site navigation, whose set-active
+# better-auth refuses, ends at once (#147): on the active organization
+# when the session has one, on /403 when it has none.
 #
 # Usage: smoke-ssr-page.sh <label> <user name>
 #
@@ -42,7 +44,7 @@ esac
 # keepCurrentActiveOrganization: without it the new organization becomes
 # the active one, and the middleware would never call set-active.
 declare -A org_ids
-for variant in referer typed foreign; do
+for variant in referer typed foreign refused; do
   slug=smoke-ssr-$variant
   status=$(curl -sS --max-time 30 -o "ssr-org-$variant.json" -w '%{http_code}' \
     -X POST "$NUXT_APP_URL/api/auth/organization/create" \
@@ -57,6 +59,13 @@ for variant in referer typed foreign; do
   org_ids[$variant]=$(jq -er .id "ssr-org-$variant.json") \
     || fail "no id in ssr-org-$variant.json"
 done
+
+# Active organization of the session, empty when there is none.
+active_org() {
+  curl -sS --max-time 30 -H "Cookie: $cookie" \
+    "$NUXT_APP_URL/api/auth/get-session?disableCookieCache=true" \
+    | jq -r '.session.activeOrganizationId // empty'
+}
 
 # No -L: a refused set-active redirects to another organization, so only
 # an exact 200 proves the page rendered for the requested one. With no
@@ -78,10 +87,7 @@ check_page() {
     || fail "$variant page lacks \"$welcome\""
   # Proof that set-active ran and succeeded: the session moved to this
   # organization, which was not the active one before the request.
-  active=$(curl -sS --max-time 30 -H "Cookie: $cookie" \
-    "$NUXT_APP_URL/api/auth/get-session?disableCookieCache=true" \
-    | jq -r '.session.activeOrganizationId // empty') \
-    || fail "$variant get-session request failed"
+  active=$(active_org) || fail "$variant get-session request failed"
   [ "$active" = "${org_ids[$variant]}" ] \
     || fail "after the $variant page the active organization is '$active', not ${org_ids[$variant]}"
 }
@@ -115,4 +121,54 @@ fi
 if grep -E 'setActive failed|MISSING_OR_NULL_ORIGIN|INVALID_ORIGIN' server.log; then
   fail "server.log shows a refused set-active"
 fi
-echo "SSR pages rendered for ${!org_ids[*]} without a refused set-active"
+echo "SSR pages rendered for referer, typed and foreign without a refused set-active"
+
+# A cross-site navigation sends no Origin and no Referer, and the SSR auth
+# client adds the configured origin only for Sec-Fetch-Site none or
+# same-origin, so better-auth refuses the set-active of the refused
+# organization. The middleware must answer with one redirect, without -L
+# and within --max-time, and leave the session where it was.
+#
+# Only the session token is sent: $cookie still holds the session_data
+# cache cookie of the sign-in, with no active organization, which a
+# browser would have replaced with the one each page sets. Without it,
+# better-auth reads the session from the database, for the pages and for
+# the set-active that unsets the organization (which, reading the cached
+# session, would see none to unset and change nothing).
+token_cookie=$(printf '%s' "$cookie" | tr ';' '\n' | sed 's/^ *//' \
+  | grep '^better-auth\.session_token=') || fail "no session token in $jar"
+check_refused() {
+  local variant=$1 expected=$2 before=$3 status location active
+  status=$(curl -sS --max-time 30 -o "ssr-$variant-body.txt" -D "ssr-$variant-headers.txt" \
+    -w '%{http_code}' -H "Cookie: $token_cookie" -H 'Sec-Fetch-Site: cross-site' \
+    "$NUXT_APP_URL/smoke-ssr-refused/dashboard") \
+    || fail "$variant page request failed or ran past 30 seconds"
+  location=$(sed -n 's/^[Ll]ocation: *//p' "ssr-$variant-headers.txt" \
+    | tr -d '\r' | sed -E 's|^https?://[^/]+||')
+  echo "$variant page status: $status, location: $location"
+  [ "$status" = "302" ] || fail "$variant page answered $status instead of 302"
+  [ "$location" = "$expected" ] \
+    || fail "$variant page redirected to '$location', not $expected"
+  active=$(active_org) || fail "$variant get-session request failed"
+  [ "$active" = "$before" ] \
+    || fail "after the $variant page the active organization is '$active', not '$before'"
+}
+
+# The foreign page left smoke-ssr-foreign active.
+check_refused refused-active /smoke-ssr-foreign/dashboard "${org_ids[foreign]}"
+
+status=$(curl -sS --max-time 30 -o ssr-unset-active.json -w '%{http_code}' \
+  -X POST "$NUXT_APP_URL/api/auth/organization/set-active" \
+  -H "Cookie: $token_cookie" -H "Origin: $NUXT_APP_URL" \
+  -H 'Content-Type: application/json' -d '{"organizationId":null}') \
+  || fail "unsetting the active organization failed"
+[ "$status" = "200" ] || fail "unsetting the active organization answered $status"
+active=$(active_org) || fail "get-session request failed"
+[ -z "$active" ] || fail "the active organization is still '$active' after unsetting it"
+check_refused refused-none /403 ""
+
+# One refused set-active per page: a loop would log more.
+refusals=$(grep -c 'setActive failed' server.log || true)
+[ "$refusals" = "2" ] \
+  || fail "server.log shows $refusals refused set-active, not 1 per refused page"
+echo "Refused set-active pages redirected once, to the active organization and to /403"

@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linked keys to their organization and deletes the keys never linked. Clients create a key with a
   top-level `organizationId` instead of `metadata.organizationId`. A key now survives the user who
   created it and is deleted with its organization
+  ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145))
 - `pnpm typecheck` is a blocking CI check and must stay at zero errors
   ([#98](https://github.com/juherr/nuxt-saas-starter/pull/98))
 - Rename the package to `nuxt-saas-starter`, declare it MIT in `package.json`, restore the NuxSaaS

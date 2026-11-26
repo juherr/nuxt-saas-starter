@@ -71,6 +71,75 @@ async function deleteUploadedFiles(userId: string, actorId: string) {
 }
 
 /**
+ * The avatar a user had before changing it on /update-user, keyed by the
+ * endpoint context: better-auth hands the same context object to the
+ * update.before and update.after hooks of one update, and the after hook
+ * only sees the updated user (db/with-hooks.mjs updateWithHooks).
+ */
+const previousAvatars = new WeakMap<object, { userId: string, previousImage: string }>()
+
+/**
+ * Remembers the signed-in user's current avatar when they change it
+ * themselves. An admin updating another user goes through
+ * /admin/update-user and is left out. A failed read is logged and lets the
+ * update through: the previous file then stays.
+ */
+async function rememberPreviousAvatar(data: { image?: string | null }, context: { path?: string, context?: { session?: { user: { id: string } } | null } } | null | undefined) {
+  const userId = context?.context?.session?.user.id
+  if (!context || context.path !== '/update-user' || data.image === undefined || !userId) {
+    return
+  }
+  try {
+    const [current] = await getDB()
+      .select({ image: schema.user.image })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
+    if (current?.image) {
+      previousAvatars.set(context, { userId, previousImage: current.image })
+    }
+  } catch (error) {
+    console.error(`[Auth] Cannot read the current avatar of user ${userId}:`, error)
+  }
+}
+
+/**
+ * Deletes the files behind the avatar a user replaced or removed. The only
+ * link from an avatar to its file is `file.url`; a file another user
+ * uploaded at the same URL is never touched. Never throws: the user row is
+ * already updated.
+ */
+async function deleteReplacedAvatar(updated: { id: string, image?: string | null } | null, context: object | null | undefined) {
+  const entry = context ? previousAvatars.get(context) : undefined
+  if (!context || !entry) {
+    return
+  }
+  previousAvatars.delete(context)
+  const { userId, previousImage } = entry
+  if (!updated || updated.id !== userId || updated.image === previousImage) {
+    return
+  }
+  try {
+    const files = await getDB()
+      .select({ id: schema.file.id })
+      .from(schema.file)
+      .where(and(eq(schema.file.url, previousImage), eq(schema.file.uploadedBy, userId)))
+    if (!files.length) {
+      return
+    }
+    const fileService = await createFileService()
+    for (const { id } of files) {
+      try {
+        await fileService.deleteFile(id, userId)
+      } catch (error) {
+        console.error(`[Auth] Failed to delete the previous avatar file ${id} of user ${userId}:`, error)
+      }
+    }
+  } catch (error) {
+    console.error(`[Auth] Cannot delete the previous avatar files of user ${userId}:`, error)
+  }
+}
+
+/**
  * Auth endpoints the app does not serve. Subscriptions are cancelled and
  * resumed through /api/stripe/cancel and /api/stripe/resume, which check
  * that the subscription belongs to the caller's organization; the billing
@@ -341,7 +410,12 @@ export const createBetterAuth = () => betterAuth({
         }
       },
       update: {
-        after: async (user) => {
+        // Returns nothing: returning false would cancel the update.
+        before: async (data, context) => {
+          await rememberPreviousAvatar(data, context)
+        },
+        after: async (user, context) => {
+          await deleteReplacedAvatar(user, context)
           // When user email changes, update Stripe customer email for orgs they own
           console.log('[Auth] User update hook triggered:', { userId: user.id, email: user.email, emailVerified: user.emailVerified })
 

@@ -119,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sessions and rate-limit counters, recommends Redis in production, and gives a cron-able `find`
   command that clears them from `.data/kv`
   ([#134](https://github.com/juherr/nuxt-saas-starter/pull/134))
+- Role labels show each role of a list, joined, instead of the raw value: the admin users page
+  translates them (`User, Administrator` rather than the key `user.roles.user,admin`), the profile
+  page badge reads `User, Administrator` rather than `user,admin`, and the members page badge reads
+  `Owner, Admin` rather than `owner,admin`
+  ([#144](https://github.com/juherr/nuxt-saas-starter/pull/144))
 
 ### Security
 

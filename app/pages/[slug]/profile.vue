@@ -1,4 +1,6 @@
 <!-- SPDX-License-Identifier: MIT -->
+<i18n src="./profile.i18n.json"></i18n>
+
 <script setup lang="ts">
 definePageMeta({
   layout: 'dashboard'
@@ -6,6 +8,7 @@ definePageMeta({
 
 const { user, client, fetchSession } = useAuth()
 const toast = useToast()
+const { t } = useI18n()
 const route = useRoute()
 
 // Form states
@@ -81,13 +84,13 @@ async function uploadAvatar(event: Event) {
 
   // Validate file type
   if (!file.type.startsWith('image/')) {
-    toast.add({ title: 'Please select an image file', color: 'error' })
+    toast.add({ title: t('profile.toast.imageType'), color: 'error' })
     return
   }
 
   // Validate file size (max 5MB)
   if (file.size > 5 * 1024 * 1024) {
-    toast.add({ title: 'Image must be less than 5MB', color: 'error' })
+    toast.add({ title: t('profile.toast.imageSize'), color: 'error' })
     return
   }
 
@@ -103,11 +106,11 @@ async function uploadAvatar(event: Event) {
 
     // Update user image
     await client.updateUser({ image: response.file.url })
-    toast.add({ title: 'Profile picture updated', color: 'success' })
+    toast.add({ title: t('profile.toast.avatarUpdated'), color: 'success' })
     // Reload to update all avatar instances
     window.location.reload()
   } catch (e: any) {
-    toast.add({ title: 'Failed to upload image', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.avatarUploadFailed'), description: e.message, color: 'error' })
   } finally {
     uploadingAvatar.value = false
     // Reset input
@@ -121,11 +124,11 @@ async function removeAvatar() {
   uploadingAvatar.value = true
   try {
     await client.updateUser({ image: '' })
-    toast.add({ title: 'Profile picture removed', color: 'success' })
+    toast.add({ title: t('profile.toast.avatarRemoved'), color: 'success' })
     // Reload to update all avatar instances
     window.location.reload()
   } catch (e: any) {
-    toast.add({ title: 'Failed to remove image', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.avatarRemoveFailed'), description: e.message, color: 'error' })
     uploadingAvatar.value = false
   }
 }
@@ -139,9 +142,9 @@ async function updateName() {
   try {
     await client.updateUser({ name: name.value })
     await fetchSession()
-    toast.add({ title: 'Name updated successfully', color: 'success' })
+    toast.add({ title: t('profile.toast.nameUpdated'), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: 'Failed to update name', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.nameUpdateFailed'), description: e.message, color: 'error' })
   } finally {
     updatingName.value = false
   }
@@ -159,13 +162,13 @@ async function changeEmail() {
       callbackURL: `/${route.params.slug}/profile`
     })
     toast.add({
-      title: 'Verification email sent',
-      description: 'Please check your new email address to verify the change.',
+      title: t('profile.toast.verificationSent'),
+      description: t('profile.toast.emailChangeDescription'),
       color: 'success'
     })
     newEmail.value = ''
   } catch (e: any) {
-    toast.add({ title: 'Failed to change email', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.emailChangeFailed'), description: e.message, color: 'error' })
   } finally {
     updatingEmail.value = false
   }
@@ -174,7 +177,7 @@ async function changeEmail() {
 // Change password
 async function changePassword() {
   if (newPassword.value !== confirmPassword.value) {
-    toast.add({ title: 'Passwords do not match', color: 'error' })
+    toast.add({ title: t('profile.toast.passwordsMismatch'), color: 'error' })
     return
   }
 
@@ -185,12 +188,12 @@ async function changePassword() {
       newPassword: newPassword.value,
       revokeOtherSessions: true
     })
-    toast.add({ title: 'Password changed successfully', color: 'success' })
+    toast.add({ title: t('profile.toast.passwordChanged'), color: 'success' })
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
   } catch (e: any) {
-    toast.add({ title: 'Failed to change password', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.passwordChangeFailed'), description: e.message, color: 'error' })
   } finally {
     updatingPassword.value = false
   }
@@ -205,7 +208,7 @@ async function linkAccount(providerId: string) {
       callbackURL: `/${route.params.slug}/profile?linked=${providerId}`
     })
   } catch (e: any) {
-    toast.add({ title: 'Failed to link account', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.linkFailed'), description: e.message, color: 'error' })
     linkingAccount.value = null
   }
 }
@@ -215,8 +218,8 @@ async function unlinkAccount(providerId: string) {
   // Prevent unlinking if it's the only account
   if (accounts.value.length <= 1) {
     toast.add({
-      title: 'Cannot unlink',
-      description: 'You must have at least one sign-in method.',
+      title: t('profile.toast.cannotUnlink'),
+      description: t('profile.toast.cannotUnlinkDescription'),
       color: 'error'
     })
     return
@@ -230,9 +233,9 @@ async function unlinkAccount(providerId: string) {
       throw new Error(`No ${providerId} account is linked`)
     await client.unlinkAccount({ accountId: account.id })
     await fetchAccounts()
-    toast.add({ title: `${providerId} account unlinked`, color: 'success' })
+    toast.add({ title: t('profile.toast.unlinked', { provider: providerId }), color: 'success' })
   } catch (e: any) {
-    toast.add({ title: 'Failed to unlink account', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.unlinkFailed'), description: e.message, color: 'error' })
   } finally {
     unlinkingAccount.value = null
   }
@@ -246,13 +249,13 @@ async function deleteAccount() {
       callbackURL: '/'
     })
     toast.add({
-      title: 'Verification email sent',
-      description: 'Please check your email to confirm account deletion.',
+      title: t('profile.toast.verificationSent'),
+      description: t('profile.toast.deleteDescription'),
       color: 'success'
     })
     showDeleteConfirm.value = false
   } catch (e: any) {
-    toast.add({ title: 'Failed to delete account', description: e.message, color: 'error' })
+    toast.add({ title: t('profile.toast.deleteFailed'), description: e.message, color: 'error' })
   } finally {
     deletingAccount.value = false
   }
@@ -263,10 +266,10 @@ onMounted(() => {
   fetchAccounts()
 
   if (route.query.emailChanged) {
-    toast.add({ title: 'Email changed successfully', color: 'success' })
+    toast.add({ title: t('profile.toast.emailChanged'), color: 'success' })
   }
   if (route.query.linked) {
-    toast.add({ title: `${route.query.linked} account linked successfully`, color: 'success' })
+    toast.add({ title: t('profile.toast.linked', { provider: String(route.query.linked) }), color: 'success' })
     fetchAccounts()
   }
 })
@@ -282,17 +285,17 @@ watch(() => user.value?.name, (newName) => {
   <div class="max-w-2xl mx-auto space-y-8 p-4">
     <div>
       <h1 class="text-2xl font-bold">
-        Profile Settings
+        {{ t('profile.title') }}
       </h1>
       <p class="text-muted-foreground">
-        Manage your account settings and connected accounts.
+        {{ t('profile.subtitle') }}
       </p>
     </div>
 
     <!-- Profile Information -->
     <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
       <h2 class="text-lg font-semibold mb-4">
-        Profile Information
+        {{ t('profile.info.title') }}
       </h2>
 
       <div class="space-y-6">
@@ -301,7 +304,7 @@ watch(() => user.value?.name, (newName) => {
           <div class="relative group">
             <UAvatar
               :src="user?.image || undefined"
-              :alt="user?.name || 'User'"
+              :alt="user?.name || t('profile.avatar.alt')"
               size="3xl"
               class="border-2 border-neutral-200 dark:border-neutral-700"
               :ui="{ fallback: 'text-2xl font-semibold' }"
@@ -347,7 +350,7 @@ watch(() => user.value?.name, (newName) => {
                 :loading="uploadingAvatar"
                 @click="avatarInput?.click()"
               >
-                Upload Photo
+                {{ t('profile.avatar.upload') }}
               </UButton>
               <UButton
                 v-if="user?.image"
@@ -358,12 +361,12 @@ watch(() => user.value?.name, (newName) => {
                 :loading="uploadingAvatar"
                 @click="removeAvatar"
               >
-                Remove
+                {{ t('profile.avatar.remove') }}
               </UButton>
             </div>
             <template v-if="!demoMode">
               <p class="text-xs text-muted-foreground mt-2">
-                JPG, PNG or GIF. Max 5MB.
+                {{ t('profile.avatar.hint') }}
               </p>
               <!-- Hidden file input -->
               <input
@@ -378,11 +381,11 @@ watch(() => user.value?.name, (newName) => {
         </div>
 
         <!-- Name -->
-        <UFormField label="Display Name">
+        <UFormField :label="t('profile.name.label')">
           <div class="flex gap-2">
             <UInput
               v-model="name"
-              placeholder="Your name"
+              :placeholder="t('profile.name.placeholder')"
               class="flex-1"
               @keyup.enter="updateName"
             />
@@ -391,7 +394,7 @@ watch(() => user.value?.name, (newName) => {
               :disabled="name === user?.name || !name.trim()"
               @click="updateName"
             >
-              Save
+              {{ t('profile.name.save') }}
             </UButton>
           </div>
         </UFormField>
@@ -401,7 +404,7 @@ watch(() => user.value?.name, (newName) => {
     <!-- Email -->
     <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
       <h2 class="text-lg font-semibold mb-4">
-        Email Address
+        {{ t('profile.email.title') }}
       </h2>
 
       <div class="space-y-4">
@@ -417,11 +420,11 @@ watch(() => user.value?.name, (newName) => {
             variant="subtle"
             size="xs"
           >
-            Verified
+            {{ t('profile.email.verified') }}
           </UBadge>
         </div>
 
-        <UFormField label="Change Email">
+        <UFormField :label="t('profile.email.changeLabel')">
           <div class="flex gap-2">
             <UInput
               v-model="newEmail"
@@ -435,11 +438,11 @@ watch(() => user.value?.name, (newName) => {
               :disabled="!newEmail.trim()"
               @click="changeEmail"
             >
-              Change
+              {{ t('profile.email.change') }}
             </UButton>
           </div>
           <p class="text-xs text-muted-foreground mt-1">
-            A verification email will be sent to your new address.
+            {{ t('profile.email.hint') }}
           </p>
         </UFormField>
       </div>
@@ -456,10 +459,10 @@ watch(() => user.value?.name, (newName) => {
         </div>
         <div>
           <h2 class="text-lg font-semibold">
-            Password
+            {{ t('profile.password.title') }}
           </h2>
           <p class="text-sm text-muted-foreground">
-            {{ hasPassword ? 'Update your password to keep your account secure' : 'Add a password to your account' }}
+            {{ hasPassword ? t('profile.password.updateDescription') : t('profile.password.addDescription') }}
           </p>
         </div>
       </div>
@@ -469,7 +472,7 @@ watch(() => user.value?.name, (newName) => {
         class="space-y-4"
       >
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <UFormField label="Current Password">
+          <UFormField :label="t('profile.password.current')">
             <UInput
               v-model="currentPassword"
               type="password"
@@ -478,7 +481,7 @@ watch(() => user.value?.name, (newName) => {
             />
           </UFormField>
 
-          <UFormField label="New Password">
+          <UFormField :label="t('profile.password.new')">
             <UInput
               v-model="newPassword"
               type="password"
@@ -487,7 +490,7 @@ watch(() => user.value?.name, (newName) => {
             />
           </UFormField>
 
-          <UFormField label="Confirm Password">
+          <UFormField :label="t('profile.password.confirm')">
             <UInput
               v-model="confirmPassword"
               type="password"
@@ -500,14 +503,14 @@ watch(() => user.value?.name, (newName) => {
 
         <div class="flex items-center justify-between pt-2">
           <p class="text-xs text-muted-foreground">
-            Changing your password will sign you out of other devices.
+            {{ t('profile.password.signOutHint') }}
           </p>
           <UButton
             :loading="updatingPassword"
             :disabled="!currentPassword || !newPassword || !confirmPassword"
             @click="changePassword"
           >
-            Update Password
+            {{ t('profile.password.update') }}
           </UButton>
         </div>
       </div>
@@ -522,7 +525,7 @@ watch(() => user.value?.name, (newName) => {
         />
         <div class="flex-1">
           <p class="text-sm text-amber-800 dark:text-amber-200">
-            You signed up with a social account. To add a password, use the "Forgot Password" option on the sign-in page.
+            {{ t('profile.password.socialNotice') }}
           </p>
         </div>
         <NuxtLink
@@ -533,7 +536,7 @@ watch(() => user.value?.name, (newName) => {
             variant="outline"
             size="sm"
           >
-            Set Password
+            {{ t('profile.password.set') }}
           </UButton>
         </NuxtLink>
       </div>
@@ -545,7 +548,7 @@ watch(() => user.value?.name, (newName) => {
     <!-- Connected Accounts -->
     <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
       <h2 class="text-lg font-semibold mb-4">
-        Connected Accounts
+        {{ t('profile.accounts.title') }}
       </h2>
 
       <div
@@ -584,7 +587,7 @@ watch(() => user.value?.name, (newName) => {
               :disabled="accounts.length <= 1"
               @click="unlinkAccount(provider.id)"
             >
-              Disconnect
+              {{ t('profile.accounts.disconnect') }}
             </UButton>
           </template>
           <template v-else>
@@ -594,7 +597,7 @@ watch(() => user.value?.name, (newName) => {
               :loading="linkingAccount === provider.id"
               @click="linkAccount(provider.id)"
             >
-              Connect
+              {{ t('profile.accounts.connect') }}
             </UButton>
           </template>
         </div>
@@ -609,14 +612,14 @@ watch(() => user.value?.name, (newName) => {
               name="i-lucide-key-round"
               class="w-5 h-5"
             />
-            <span class="font-medium">Email & Password</span>
+            <span class="font-medium">{{ t('profile.accounts.emailPassword') }}</span>
           </div>
           <UBadge
             color="success"
             variant="subtle"
             size="xs"
           >
-            Active
+            {{ t('profile.accounts.active') }}
           </UBadge>
         </div>
       </div>
@@ -625,12 +628,12 @@ watch(() => user.value?.name, (newName) => {
     <!-- Danger Zone -->
     <div class="bg-white dark:bg-neutral-800 rounded-xl border border-red-200 dark:border-red-900 p-6">
       <h2 class="text-lg font-semibold text-red-600 dark:text-red-400 mb-4">
-        Danger Zone
+        {{ t('profile.danger.title') }}
       </h2>
 
       <div class="space-y-4">
         <p class="text-sm text-muted-foreground">
-          Once you delete your account, there is no going back. Please be certain.
+          {{ t('profile.danger.description') }}
         </p>
 
         <UButton
@@ -638,7 +641,7 @@ watch(() => user.value?.name, (newName) => {
           variant="outline"
           @click="showDeleteConfirm = true"
         >
-          Delete Account
+          {{ t('profile.danger.delete') }}
         </UButton>
       </div>
     </div>
@@ -646,7 +649,7 @@ watch(() => user.value?.name, (newName) => {
     <!-- Delete Confirmation Modal -->
     <UModal
       v-model:open="showDeleteConfirm"
-      title="Delete Account"
+      :title="t('profile.deleteModal.title')"
     >
       <template #body>
         <div class="space-y-4">
@@ -658,10 +661,10 @@ watch(() => user.value?.name, (newName) => {
               />
               <div>
                 <h3 class="font-semibold text-red-800 dark:text-red-200">
-                  This action cannot be undone
+                  {{ t('profile.deleteModal.warningTitle') }}
                 </h3>
                 <p class="text-sm text-red-700 dark:text-red-300 mt-1">
-                  This will permanently delete your account and remove all your data from our servers. You will lose access to all organizations you own.
+                  {{ t('profile.deleteModal.warningBody') }}
                 </p>
               </div>
             </div>
@@ -674,14 +677,14 @@ watch(() => user.value?.name, (newName) => {
           variant="outline"
           @click="showDeleteConfirm = false"
         >
-          Cancel
+          {{ t('profile.deleteModal.cancel') }}
         </UButton>
         <UButton
           color="error"
           :loading="deletingAccount"
           @click="deleteAccount"
         >
-          Delete My Account
+          {{ t('profile.deleteModal.confirm') }}
         </UButton>
       </template>
     </UModal>

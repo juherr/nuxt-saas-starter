@@ -75,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Users holding the admin role among several roles (`user,admin`) can reach the admin pages and
   API and delete other users' files, and the admin users page role menu adds or removes the
   clicked role instead of replacing the list ([#123](https://github.com/juherr/nuxt-saas-starter/pull/123))
+- The dashboard's profile settings page and its notifications follow the selected language
+  (English, French, Japanese or Simplified Chinese) instead of always showing English
+  ([#127](https://github.com/juherr/nuxt-saas-starter/pull/127))
 
 ## [0.1.0] - 2026-11-18
 

@@ -8,6 +8,8 @@ import { requireSubscriptionItem } from '~~/server/utils/stripeSubscriptionItem'
 import { getStripeSubscriptionPeriodEndSeconds } from '~~/server/utils/stripeSubscriptionPeriod'
 import { getPlanKeyFromId, getTierForInterval } from '~~/shared/utils/plans'
 
+const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
+
 export default defineEventHandler(async (event) => {
   await requireAuthSession(event)
 
@@ -181,8 +183,7 @@ export default defineEventHandler(async (event) => {
   // change on a subscription that is already yearly keeps its period.
   let periodEnd = upcomingInvoice.period_end
   if (newInterval === 'year' && currentItem.price.recurring?.interval === 'month') {
-    // When upgrading to yearly, next charge is 1 year from today
-    periodEnd = Math.floor(Date.now() / 1000) + 31536000 // 365 days in seconds
+    periodEnd = Math.floor(Date.now() / 1000) + ONE_YEAR_SECONDS
   }
 
   // Get payment method info

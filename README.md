@@ -126,11 +126,12 @@ The generated migration then ends with `DROP TABLE "apiKey" CASCADE`, which lose
    UPDATE "subscription" SET "status" = 'incomplete' WHERE "status" IS NULL;--> statement-breakpoint
    ```
 
-3. If `api_key_organization` exists, the same file also ends with
-   `DROP TABLE "api_key_organization" CASCADE`: add the statements of
-   [Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) after the
-   copy of step 1 and before that line, or every key copied in step 1 still references its creator
-   and no organization lists it.
+3. If `api_key_organization` exists, the same file also drops it
+   (`DROP TABLE "api_key_organization" CASCADE`): add the statements of
+   [Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) right
+   after the copy of step 1, and move both before the first statement that drops or alters
+   `apiKey` or `api_key_organization` (the generator may put that `DROP` first). Otherwise every key
+   copied in step 1 still references its creator and no organization lists it.
 
 Then apply it (`npx nuxt db migrate`, or `pnpm build`). The same migration also adds
 `user.stripe_customer_id` and the `subscription` columns `cancel_at`, `canceled_at`, `ended_at`,

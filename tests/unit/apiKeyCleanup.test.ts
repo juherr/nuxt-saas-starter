@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it, vi } from 'vitest'
 import { apiKey } from '~~/server/db/schema'
-import { deleteOrganizationApiKeys } from '~~/server/utils/apiKeyOrganization'
+import { deleteOrganizationApiKeys } from '~~/server/utils/apiKeyCleanup'
 import { renderSql } from './support/sql'
 
 function fakeDB() {
@@ -11,7 +11,7 @@ function fakeDB() {
 }
 
 describe('deleteOrganizationApiKeys', () => {
-  it('deletes only the API keys linked to the deleted organization', async () => {
+  it('deletes only the API keys the deleted organization owns', async () => {
     const { db, deleteFrom, where } = fakeDB()
 
     await deleteOrganizationApiKeys(db as never, 'org-1')
@@ -19,10 +19,7 @@ describe('deleteOrganizationApiKeys', () => {
     expect(deleteFrom).toHaveBeenCalledTimes(1)
     expect(deleteFrom).toHaveBeenCalledWith(apiKey)
     const query = renderSql(where.mock.calls[0]![0])
-    expect(query.sql).toBe(
-      '"api_key"."id" in (select "api_key_id" from "api_key_organization"'
-      + ' where "api_key_organization"."organization_id" = $1)'
-    )
+    expect(query.sql).toBe('"api_key"."reference_id" = $1')
     expect(query.params).toEqual(['org-1'])
   })
 

@@ -7,7 +7,7 @@ import { renderSql } from './support/sql'
 const getAuthSession = vi.hoisted(() => vi.fn())
 const memberships = vi.hoisted(() => ({ current: {} as Record<string, string> }))
 const findMember = vi.hoisted(() => vi.fn())
-const findLink = vi.hoisted(() => vi.fn())
+const findKey = vi.hoisted(() => vi.fn())
 const selectedRows = vi.hoisted(() => ({ current: [] as unknown[] }))
 const select = vi.hoisted(() => vi.fn())
 const deleteWhere = vi.hoisted(() => vi.fn(async (_where: unknown) => undefined))
@@ -18,7 +18,7 @@ vi.mock('~~/server/utils/db', () => ({
   useDB: async () => ({
     query: {
       member: { findFirst: findMember },
-      apiKeyOrganization: { findFirst: findLink }
+      apiKey: { findFirst: findKey }
     },
     select,
     delete: deleteFrom
@@ -70,7 +70,7 @@ describe('organization API key routes', () => {
     getAuthSession.mockReset().mockResolvedValue({ user: { id: 'u1' } })
     memberships.current = { 'org-1': 'owner' }
     findMember.mockReset().mockImplementation(memberLookup)
-    findLink.mockReset().mockResolvedValue(undefined)
+    findKey.mockReset().mockResolvedValue(undefined)
     selectedRows.current = []
     selectQueries = []
     select.mockReset().mockImplementation(selectChain)
@@ -109,14 +109,14 @@ describe('organization API key routes', () => {
       await expect(listKeys('org-1')).resolves.toEqual([])
     })
 
-    it('lists only keys linked to exactly the requested organization, not to one whose id contains it', async () => {
+    it('lists only keys owned by exactly the requested organization, not by one whose id contains it', async () => {
       memberships.current = { 'org-1': 'owner', 'org-12': 'owner' }
 
       await listKeys('org-1')
 
       const [query] = selectQueries
       const where = renderSql(query!.where)
-      expect(where.sql).toBe('"api_key_organization"."organization_id" = $1')
+      expect(where.sql).toBe('"api_key"."reference_id" = $1')
       expect(where.params).toEqual(['org-1'])
     })
 
@@ -131,8 +131,8 @@ describe('organization API key routes', () => {
         lastRequest: null,
         expiresAt: null,
         key: 'hashed-secret',
-        userId: 'user-1',
-        metadata: '{"organizationId":"org-1"}'
+        referenceId: 'org-1',
+        metadata: '{"note":"ci"}'
       }]
       const displayFields = ['createdAt', 'enabled', 'expiresAt', 'id', 'lastRequest', 'name', 'prefix', 'start']
 
@@ -142,12 +142,11 @@ describe('organization API key routes', () => {
       expect(Object.keys(listed as object).sort()).toEqual(displayFields)
     })
 
-    it('lists a key only through its organization link, so an unlinked legacy key is never listed', async () => {
+    it('reads the owning organization from reference_id alone, never from the metadata', async () => {
       await listKeys('org-1')
 
       const [query] = selectQueries
-      expect(query!.join?.kind).toBe('inner')
-      expect(renderSql(query!.join!.on).sql).toBe('"api_key_organization"."api_key_id" = "api_key"."id"')
+      expect(query!.join).toBeUndefined()
       expect(renderSql(query!.where).sql).not.toMatch(/metadata|like/i)
     })
   })
@@ -157,22 +156,24 @@ describe('organization API key routes', () => {
       getAuthSession.mockResolvedValue(null)
 
       await expect(deleteKey('key-1')).rejects.toMatchObject({ statusCode: 401 })
-      expect(findLink).not.toHaveBeenCalled()
+      expect(findKey).not.toHaveBeenCalled()
       expect(deleteFrom).not.toHaveBeenCalled()
     })
 
-    it('finds the key\'s organization by the exact key id', async () => {
+    it('finds the key\'s organization by the exact key id, without reading its hash', async () => {
       await errorOf(deleteKey('key-1'))
 
-      expect(renderSql(findLink.mock.calls[0]![0].where)).toMatchObject({
-        sql: '"api_key_organization"."api_key_id" = $1',
+      const [lookup] = findKey.mock.calls[0]!
+      expect(renderSql(lookup.where)).toMatchObject({
+        sql: '"api_key"."id" = $1',
         params: ['key-1']
       })
+      expect(lookup.columns).toEqual({ id: true, referenceId: true })
     })
 
     it.each(['owner', 'admin'])('lets the %s of the key\'s organization revoke it', async (role) => {
       memberships.current = { 'org-1': role }
-      findLink.mockResolvedValue({ apiKeyId: 'key-1', organizationId: 'org-1' })
+      findKey.mockResolvedValue({ id: 'key-1', referenceId: 'org-1' })
 
       await expect(deleteKey('key-1')).resolves.toEqual({ success: true })
       expect(deleteFrom).toHaveBeenCalledTimes(1)
@@ -181,15 +182,15 @@ describe('organization API key routes', () => {
 
     it.each([
       ['an unknown key', 'key-unknown', undefined],
-      ['an unlinked legacy key', 'key-legacy', undefined],
-      ['another organization\'s key', 'key-12', { apiKeyId: 'key-12', organizationId: 'org-12' }],
-      ['a key of an organization the caller is only a member of', 'key-2', { apiKeyId: 'key-2', organizationId: 'org-2' }]
-    ])('answers the same 404 as for an unknown key for %s, deleting nothing', async (_label, keyId, link) => {
+      ['another organization\'s key', 'key-12', { id: 'key-12', referenceId: 'org-12' }],
+      ['a key of an organization the caller is only a member of', 'key-2', { id: 'key-2', referenceId: 'org-2' }],
+      ['a legacy key whose reference is the caller\'s user id', 'key-legacy', { id: 'key-legacy', referenceId: 'u1' }]
+    ])('answers the same 404 as for an unknown key for %s, deleting nothing', async (_label, keyId, found) => {
       memberships.current = { 'org-1': 'owner', 'org-2': 'member' }
-      findLink.mockResolvedValue(undefined)
+      findKey.mockResolvedValue(undefined)
       const unknownKeyRefusal = await errorOf(deleteKey('key-unknown'))
 
-      findLink.mockResolvedValue(link)
+      findKey.mockResolvedValue(found)
       const refusal = await errorOf(deleteKey(keyId))
 
       expect(refusal).toMatchObject({ statusCode: 404, statusMessage: (unknownKeyRefusal as any).statusMessage })

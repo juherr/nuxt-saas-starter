@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { FileService, useFileManagerConfig } from '~~/server/services/file/fileService'
 import { createStorageProvider } from '~~/server/services/file/storage/factory'
+import { hasRole } from '~~/shared/utils/permissions'
 
 const fileNotFound = () => createError({ statusCode: 404, statusMessage: 'File not found' })
 
@@ -25,7 +26,7 @@ export default defineEventHandler(async (event) => {
 
   const file = await fileService.getFile(fileId)
 
-  if (!file || (file.uploadedBy !== user.id && user.role !== 'admin')) {
+  if (!file || (file.uploadedBy !== user.id && !hasRole(user.role, 'admin'))) {
     throw fileNotFound()
   }
 

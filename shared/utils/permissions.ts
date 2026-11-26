@@ -171,6 +171,15 @@ export function parseOrgRoles(role: string | null | undefined): string[] {
 }
 
 /**
+ * Whether a stored role, a single role or a comma-separated role list
+ * (better-auth keeps several roles that way, `user,admin`), holds `wanted`.
+ * Casing must match, so `Admin` is not `admin`.
+ */
+export function hasRole(role: string | null | undefined, wanted: string): boolean {
+  return parseOrgRoles(role).includes(wanted)
+}
+
+/**
  * Whether a member's stored role, a single role or a role list, holds at
  * least one of `roles`. Casing must match.
  */

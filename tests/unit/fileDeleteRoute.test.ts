@@ -51,10 +51,20 @@ describe('deleting a file', () => {
     expect(deleteFile).toHaveBeenCalledWith('f1', 'admin', TEST_IP, TEST_AGENT)
   })
 
+  it.each(['user,admin', 'user, admin'])('lets an admin holding the role list "%s" delete another user\'s file', async (role) => {
+    requireAuth.mockResolvedValue({ id: 'admin', role })
+
+    await expect(remove()).resolves.toMatchObject({ success: true })
+
+    expect(deleteFile).toHaveBeenCalledWith('f1', 'admin', TEST_IP, TEST_AGENT)
+  })
+
   it.each([
     ['another user', { id: 'other', role: 'user' }],
     ['another user without a role', { id: 'other' }],
-    ['another user with a non-admin role', { id: 'other', role: 'moderator' }]
+    ['another user with a non-admin role', { id: 'other', role: 'moderator' }],
+    ['another user with a role list without admin', { id: 'other', role: 'user,moderator' }],
+    ['another user with a differently cased admin role', { id: 'other', role: 'user,Admin' }]
   ])('answers %s with the same 404 as a missing file', async (_label, user) => {
     requireAuth.mockResolvedValue(user)
 

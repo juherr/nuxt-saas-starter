@@ -212,14 +212,13 @@ describe('the user delete hook', () => {
     expect(createFileService).not.toHaveBeenCalled()
   })
 
-  // api_key.reference_id has no foreign key to user since better-auth 1.5,
-  // so nothing in the database removes the keys of a deleted user.
-  it('deletes the API keys the deleted user owns', async () => {
-    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' })
+  // API keys belong to organizations (reference_id is an organization id),
+  // so deleting a user deletes none: a user id there would only match a
+  // key created before organization ownership, which no route lists.
+  it('deletes no API key with the user', async () => {
+    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
 
-    expect(db.delete).toHaveBeenCalledWith(schema.apiKey)
-    expect(db.where).toHaveBeenCalledTimes(1)
-    expect(renderSql(db.where.mock.calls[0]?.[0])).toMatchObject({ sql: '"api_key"."reference_id" = $1', params: ['user-1'] })
+    expect(db.delete).not.toHaveBeenCalled()
     // better-auth cancels the deletion when a before hook returns false.
     expect(result).not.toBe(false)
   })

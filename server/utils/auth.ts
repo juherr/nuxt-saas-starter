@@ -139,8 +139,10 @@ async function deleteReplacedAvatar(updated: { id: string, image?: string | null
  * plugin's own endpoints for the same actions do not, so they are off.
  * Organization API keys are listed and revoked through
  * /api/organization/api-keys, which check the caller's role in the key's
- * organization; the API key plugin's get, list, update and delete
- * endpoints only check that the caller created the key, so they are off.
+ * organization and answer display fields only. The API key plugin's get,
+ * list, update and delete endpoints are not used, so they stay off: the
+ * app serves one path per action on a key, and creation (permission-checked
+ * by the plugin in the key's organization) is the only native one.
  * Paths are relative to the /api/auth base path.
  */
 export const DISABLED_AUTH_PATHS: readonly string[] = [
@@ -399,23 +401,12 @@ export const createBetterAuth = () => betterAuth({
         }
       },
       delete: {
-        // api_key.reference_id has no foreign key to user (@better-auth/api-key
-        // schema), so the keys of a deleted user would otherwise stay listed.
-        // Every key here references a user: the plugin keeps the default
-        // `references: 'user'`. internalAdapter.deleteUser runs outside a
-        // transaction: a throwing before hook stops it before the user row
-        // and the cached sessions are deleted, where a throwing after hook
-        // would leave the user deleted and its cached sessions alive
-        // (db/with-hooks.mjs, db/internal-adapter.mjs). Returning false
-        // would cancel the deletion, so return nothing.
-        before: async (user) => {
-          await getDB()
-            .delete(schema.apiKey)
-            .where(eq(schema.apiKey.referenceId, user.id))
-        },
         // Stored objects cannot be restored, so they go only once the user
         // row is gone: a failed or cancelled deletion keeps them. This hook
-        // never throws (see above). The signed-in user (the account owner,
+        // never throws: internalAdapter.deleteUser runs outside a
+        // transaction, so a throwing after hook would leave the user deleted
+        // and its cached sessions alive (db/with-hooks.mjs,
+        // db/internal-adapter.mjs). The signed-in user (the account owner,
         // or an admin) is the actor.
         after: async (user, context) => {
           try {

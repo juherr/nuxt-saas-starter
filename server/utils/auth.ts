@@ -15,7 +15,6 @@ import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlo
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
 import { ac, admin, member, owner } from '~~/shared/utils/permissions'
 import { userDisplayName } from '~~/shared/utils/userDisplayName'
-import { deleteOrganizationApiKeys } from './apiKeyCleanup'
 import { apiKeyPluginOptions } from './apiKeyOptions'
 import { logAuditEvent } from './auditLogger'
 import { AUDITED_SUCCESS_PATHS, resolveAuditTarget } from './authAudit'
@@ -680,12 +679,11 @@ export const createBetterAuth = () => betterAuth({
           if (user.referralCode) {
             return { data: { ...organization, referralCode: user.referralCode } }
           }
-        },
-        // The organization's keys reference it by id only, with no foreign
-        // key: delete them first, or they would stay enabled and unrevocable.
-        beforeDeleteOrganization: async ({ organization }) => {
-          await deleteOrganizationApiKeys(getDB(), organization.id)
         }
+        // No beforeDeleteOrganization: the foreign key api_key.reference_id
+        // -> organization.id (ON DELETE CASCADE, added by
+        // server/db/queries/api-key-organization-owner.postgresql.sql)
+        // deletes an organization's keys with it.
       },
       schema: {
         organization: {

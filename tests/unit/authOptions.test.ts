@@ -136,22 +136,12 @@ describe('the organization create hook', () => {
 })
 
 describe('the organization delete hook', () => {
-  beforeEach(() => {
-    db.delete.mockClear()
-    db.where.mockClear()
-  })
-
-  it('deletes the organization\'s API keys before the organization goes', async () => {
+  // The foreign key api_key.reference_id -> organization.id (ON DELETE
+  // CASCADE, server/db/queries) deletes the keys with their organization.
+  it('leaves the organization\'s API keys to the database foreign key', () => {
     const organizationPlugin = options.plugins.find((plugin: any) => plugin.id === 'organization')
 
-    await organizationPlugin.options.organizationHooks.beforeDeleteOrganization({
-      organization: { id: 'org-1' },
-      user: { id: 'user-1' }
-    })
-
-    expect(db.delete).toHaveBeenCalledTimes(1)
-    expect(db.delete).toHaveBeenCalledWith(schema.apiKey)
-    expect(renderSql(db.where.mock.calls[0]?.[0]).params).toEqual(['org-1'])
+    expect(organizationPlugin.options.organizationHooks.beforeDeleteOrganization).toBeUndefined()
   })
 })
 

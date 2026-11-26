@@ -4,10 +4,62 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const runtimeConfig = vi.hoisted(() => ({
   preset: 'node-server',
   databaseUrl: 'postgres://u:p@db:5432/app',
+  // A runtime override reaches the config as a number or, if it does not
+  // parse, as the raw string.
+  databaseConnectTimeoutMs: 10000 as unknown,
   resendApiKey: '' as string | undefined
 }))
 
+const poolOptions = vi.hoisted(() => [] as Array<Record<string, unknown>>)
+
+vi.mock('pg', () => ({
+  default: {
+    Pool: class {
+      constructor(options: Record<string, unknown>) {
+        poolOptions.push(options)
+      }
+    }
+  }
+}))
+
 vi.mock('~~/server/utils/runtimeConfig', () => ({ runtimeConfig }))
+
+describe('the PostgreSQL pool', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    poolOptions.length = 0
+  })
+
+  it('bounds the connection with the 10 s default', async () => {
+    runtimeConfig.databaseConnectTimeoutMs = 10000
+
+    const { getPgPool } = await import('~~/server/utils/drivers')
+    getPgPool()
+
+    expect(poolOptions).toEqual([expect.objectContaining({ connectionTimeoutMillis: 10000 })])
+  })
+
+  it('uses the configured connect timeout', async () => {
+    runtimeConfig.databaseConnectTimeoutMs = 2500
+
+    const { getPgPool } = await import('~~/server/utils/drivers')
+    getPgPool()
+
+    expect(poolOptions).toEqual([expect.objectContaining({ connectionTimeoutMillis: 2500 })])
+  })
+
+  it.each([['an unparsable value', 'soon'], ['zero, which pg reads as no timeout', 0], ['a negative value', -1]])(
+    'falls back to the 10 s default on %s',
+    async (_label, value) => {
+      runtimeConfig.databaseConnectTimeoutMs = value
+
+      const { getPgPool } = await import('~~/server/utils/drivers')
+      getPgPool()
+
+      expect(poolOptions).toEqual([expect.objectContaining({ connectionTimeoutMillis: 10000 })])
+    }
+  )
+})
 
 describe('the Resend client', () => {
   beforeEach(() => {

@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: MIT
+import type { AdminStore, CreateAdminConfig } from './scripts/createAdmin.ts'
+import process from 'node:process'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { config } from 'dotenv'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import pg from 'pg'
 import { v7 as uuidv7 } from 'uuid'
-import 'dotenv/config'
+import { runCreateAdmin } from './scripts/createAdmin.ts'
 
 const { Pool } = pg
-
-// Database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.NUXT_DATABASE_URL
-})
-const db = drizzle(pool)
 
 // Schema definition (simplified from your project)
 const user = pgTable('user', {
@@ -71,75 +68,51 @@ const session = pgTable('session', {
 
 const schema = { user, account, verification, session }
 
-// Initialize Better Auth
-const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema
-  }),
-  emailAndPassword: {
-    enabled: true
-  },
-  advanced: {
-    database: {
-      generateId: () => uuidv7()
+// Wiring only: the logic lives in scripts/createAdmin.ts. Nothing runs, and no
+// connection opens, unless this file is the entry point (`node create-admin.ts`).
+function connect({ databaseUrl, connectTimeoutMs }: CreateAdminConfig): AdminStore {
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    // pg waits forever on an unreachable database without it.
+    connectionTimeoutMillis: connectTimeoutMs
+  })
+  const db = drizzle(pool)
+  const auth = betterAuth({
+    database: drizzleAdapter(db, {
+      provider: 'pg',
+      schema
+    }),
+    emailAndPassword: {
+      enabled: true
+    },
+    advanced: {
+      database: {
+        generateId: () => uuidv7()
+      }
     }
-  }
-})
+  })
 
-async function createAdminUser() {
-  const email = process.env.NUXT_ADMIN_EMAIL || 'admin@example.com'
-  const password = process.env.NUXT_ADMIN_PASSWORD || 'admin-password'
-  const name = 'Admin User'
-
-  console.log(`Creating admin user: ${email}`)
-
-  try {
-    // Using better-auth to sign up
-    const newUser = await auth.api.signUpEmail({
-      body: {
-        email,
-        password,
-        name
-      },
-      asResponse: false
-    })
-
-    if (newUser && newUser.user) {
-      console.log('User created successfully:', newUser.user.id)
-
-      // Update role to admin
+  return {
+    signUp: async (body) => {
+      const result = await auth.api.signUpEmail({ body, asResponse: false })
+      return result?.user ? { id: result.user.id } : undefined
+    },
+    findUserIdByEmail: async (email) => {
+      const [found] = await db.select({ id: user.id }).from(user).where(eq(user.email, email))
+      return found?.id
+    },
+    promote: async (userId) => {
       await db.update(user)
         .set({ role: 'admin', emailVerified: true })
-        .where(eq(user.id, newUser.user.id))
-
-      console.log('User promoted to admin successfully')
-    }
-  } catch (error: any) {
-    if (error.message && error.message.includes('User already exists')) {
-      console.log('User already exists. Updating role to admin...')
-
-      // Try to find the user directly via db to update role
-      const foundUsers = await db.select().from(user).where(eq(user.email, email))
-
-      const [foundUser] = foundUsers
-      if (foundUser) {
-        await db.update(user)
-          .set({ role: 'admin', emailVerified: true })
-          .where(eq(user.id, foundUser.id))
-        console.log(`User ${foundUser.email} promoted to admin successfully.`)
-      } else {
-        console.log('Could not find user to promote.')
-      }
-    } else {
-      console.error('Error creating admin user:', error)
-      if (error.body) {
-        console.error('Error body:', error.body)
-      }
-    }
-  } finally {
-    await pool.end()
+        .where(eq(user.id, userId))
+    },
+    close: () => pool.end()
   }
 }
 
-createAdminUser()
+if (import.meta.main) {
+  config({ quiet: true })
+  void runCreateAdmin(process.env, { connect, logger: console }).then((code) => {
+    process.exitCode = code
+  })
+}

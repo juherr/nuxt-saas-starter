@@ -99,6 +99,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replacing or removing your avatar deletes the previous avatar file you uploaded, instead of
   leaving it in storage. A file another user uploaded at the same URL is kept
   ([#126](https://github.com/juherr/nuxt-saas-starter/pull/126))
+- `create-admin.ts` exits with code 1 and says what to fix when the admin cannot be created or a
+  setting is missing, and an unreachable database fails after 10 seconds instead of hanging
+  (`NUXT_DATABASE_CONNECT_TIMEOUT_MS`); `NUXT_ADMIN_EMAIL` and `NUXT_ADMIN_PASSWORD` no longer
+  default to placeholder credentials ([#133](https://github.com/juherr/nuxt-saas-starter/pull/133))
 
 ## [0.1.0] - 2026-11-18
 

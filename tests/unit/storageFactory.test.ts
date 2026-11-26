@@ -47,6 +47,11 @@ describe('the variable a storage needs before its files get a browser URL', () =
     ['s3 with a public URL that does not parse', s3Storage({ ...completeS3, publicUrl: 'https://' }), 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL'],
     ['r2 with a public URL that is not http(s)', r2('javascript:alert(1)'), 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'],
     ['r2 with a public URL wrapped in spaces', r2('  https://files.example.test  '), undefined],
+    ['s3 with a public URL carrying a query string', s3Storage({ ...completeS3, publicUrl: 'https://cdn.example.test/files?v=1' }), 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL'],
+    ['s3 with a public URL ending with an empty query', s3Storage({ ...completeS3, publicUrl: 'https://cdn.example.test/?' }), 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL'],
+    ['r2 with a public URL carrying a fragment', r2('https://files.example.test/#top'), 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'],
+    ['r2 with a public URL ending with an empty fragment', r2('https://files.example.test#'), 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'],
+    ['s3 with a public URL with a path prefix', s3Storage({ ...completeS3, publicUrl: 'https://cdn.example.test/files' }), undefined],
     ['local storage', { provider: 'local', local: { uploadDir: './uploads', publicPath: '/uploads' } } as FileManagerConfig['storage'], undefined]
   ])('%s', async (_label, config, variable) => {
     const provider = await createStorageProvider(config)

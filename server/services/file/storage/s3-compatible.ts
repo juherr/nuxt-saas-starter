@@ -30,12 +30,13 @@ const PUBLIC_URL_VARIABLES = {
 } as const
 
 /**
- * `value` trimmed when it is an absolute http(s) URL a browser can load,
- * otherwise undefined.
+ * `value` trimmed when it is an absolute http(s) URL a browser can load and
+ * a file path can be appended to, otherwise undefined.
  */
 const browserUrl = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim()
-  if (!trimmed || !URL.canParse(trimmed)) {
+  // A query or fragment, even empty, would swallow the appended path.
+  if (!trimmed || /[?#]/.test(trimmed) || !URL.canParse(trimmed)) {
     return undefined
   }
   const { protocol } = new URL(trimmed)

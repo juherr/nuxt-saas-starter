@@ -140,8 +140,8 @@ Every stored file is served with its detected type. PNG, JPEG, WebP and GIF are 
 - **S3 / R2**: each object is stored with its `Content-Type` and `Content-Disposition`, which the
   bucket returns as is. A bucket cannot store `X-Content-Type-Options`: add it in front of the
   bucket's public URL (a CDN response header rule, for instance).
-  The public URL is required and must be an absolute `http(s)://` URL: without one (unset, blank or
-  malformed) every upload is refused with 503, before anything is
+  The public URL is required and must be an absolute `http(s)://` URL with no query string or
+  fragment: without one (unset, blank or malformed) every upload is refused with 503, before anything is
   stored, and the error names the variable to set (`NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL` for
   S3, `NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL` or `NUXT_CF_R2_PUBLIC_URL` at build time for R2).
 - Objects stored in S3 or R2 before these rules keep the `Content-Type` the client sent, and no

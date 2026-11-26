@@ -702,8 +702,11 @@ export const getAuthSession = async (event: H3Event) => {
   }
 
   const serverAuth = useServerAuth()
+  // Bypass the session cookie cache: a removed user or a revoked session
+  // must lose API access at once, not when the cache expires (#45).
   const session = await serverAuth.api.getSession({
-    headers
+    headers,
+    query: { disableCookieCache: true }
   })
   return session
 }

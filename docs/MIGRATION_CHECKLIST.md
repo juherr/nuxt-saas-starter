@@ -236,19 +236,26 @@ npx nuxt db mark-as-migrated 0001_migration_name
 
 API keys belong to exactly one organization: better-auth's API key plugin stores the
 organization's id in `api_key.reference_id` (`references: 'organization'`), checks the caller's
-`apiKey` permission in that organization when a key is created, and the
-`api_key_organization` table is gone. Deployments that linked their keys through that table move
-them with one SQL transaction before the next build.
+`apiKey` permission in that organization when a key is created. The deprecated
+`api_key_organization` table stays in the schema until
+[#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it: upgrade every deployment
+through this release first.
 
-- [ ] Follow [Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys):
-  stop the app (or API key creation), run its statements **before building** (`pnpm build`,
-  `pnpm dev` and `npx nuxt db migrate` all apply the generated
-  `DROP TABLE "api_key_organization"`), deploy, then delete the keys left without an organization.
-  When upgrading from the better-auth 1.4 schema in one go, add the copy and the statements to the
-  generated migration before its first statement that drops or alters `apiKey` or
-  `api_key_organization`.
-- [ ] Tell the affected users. Keys that were never linked to an organization are deleted by that
-  transaction; an owner or admin must recreate them.
+The move is automatic. After all migrations, `pnpm build` (with `DATABASE_URL`),
+`npx nuxt db migrate` and `pnpm dev` run
+`server/db/queries/api-key-organization-owner.postgresql.sql`, a single statement that moves every
+linked key to its organization, deletes the disabled keys that belong to no organization, and adds
+the foreign key `api_key.reference_id` → `organization.id` (`ON DELETE CASCADE`). It refuses, and
+changes nothing, while an enabled key belongs to no organization.
+
+- [ ] Follow [Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys).
+  The app can keep running during the deploy: no SQL to run by hand. When upgrading from the
+  better-auth 1.4 schema in one go, edit the generated migration as
+  [Upgrading from better-auth 1.4](../README.md#upgrading-from-better-auth-14) explains.
+- [ ] If the build or `npx nuxt db migrate` stops on that query, list the keys with the SQL in its
+  message, delete them or move each one to its organization, then run it again (README section
+  above).
+- [ ] Tell the affected users. A key deleted that way must be recreated by an owner or admin.
 - [ ] Update API clients: a key is created with a top-level `organizationId`
   (`POST /api/auth/api-key/create`), not `metadata.organizationId`; a request without it gets 400
   `ORGANIZATION_ID_REQUIRED`.
@@ -257,10 +264,9 @@ Only an `owner` or `admin` of the organization may create, list or revoke its ke
 plugin's own `/api-key/get`, `/api-key/list`, `/api-key/update` and `/api-key/delete` endpoints are
 disabled: keys are listed and revoked through `/api/organization/api-keys`, which check the
 caller's role in the key's organization and never return the key itself. A key survives the user
-who created it; deleting an organization through better-auth deletes its keys first (the
-organization plugin's `beforeDeleteOrganization` hook). An organization row removed directly in
-the database skips the hook: delete its keys with
-`DELETE FROM "api_key" WHERE "reference_id" = '<organization id>'`.
+who created it. Deleting an organization deletes its keys through the foreign key's
+`ON DELETE CASCADE`, including an organization row deleted directly in SQL; a key created while its
+organization is being deleted either fails on the foreign key or is deleted with it.
 
 ---
 

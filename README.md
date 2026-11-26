@@ -126,17 +126,21 @@ The generated migration then ends with `DROP TABLE "apiKey" CASCADE`, which lose
    UPDATE "subscription" SET "status" = 'incomplete' WHERE "status" IS NULL;--> statement-breakpoint
    ```
 
-3. If `api_key_organization` exists, the same file also drops it
-   (`DROP TABLE "api_key_organization" CASCADE`): add the statements of
-   [Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) right
-   after the copy of step 1, and move both before the first statement that drops or alters
-   `apiKey` or `api_key_organization` (the generator may put that `DROP` first). Otherwise every key
-   copied in step 1 still references its creator and no organization lists it.
+3. If `api_key_organization` already exists, its foreign key points at `apiKey`, and
+   `DROP TABLE "apiKey" CASCADE` drops that constraint. Check that the file adds a foreign key from
+   `api_key_organization` to `api_key` after the copy of step 1: the copy keeps the key ids, so the
+   links stay valid. A deployment from before the link table gets it created, empty.
 
-Then apply it (`npx nuxt db migrate`, or `pnpm build`). The same migration also adds
-`user.stripe_customer_id` and the `subscription` columns `cancel_at`, `canceled_at`, `ended_at`,
-`billing_interval` and `stripe_schedule_id`. API keys no longer have a foreign key to `user`: an
-API key belongs to its organization, and deleting the organization deletes its keys.
+The copy of step 1 stays manual: the upgrade query only moves keys that are already in `api_key`.
+Then apply the migration
+(`npx nuxt db migrate`, or `pnpm build`). After it, the query of
+[Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) moves each
+linked key to its organization. With an empty link table, every copied key still references its
+creator, so the query refuses while any of them is enabled: move or delete them as that section
+explains. The same migration also adds `user.stripe_customer_id` and the `subscription` columns
+`cancel_at`, `canceled_at`, `ended_at`, `billing_interval` and `stripe_schedule_id`. API keys no
+longer have a foreign key to `user`: an API key belongs to its organization, and deleting the
+organization deletes its keys (`ON DELETE CASCADE` on the foreign key the upgrade query adds).
 
 Single-use verification values are now written to the database as well as the KV store, and consumed
 from the database. Password reset and account deletion links issued before the deploy become
@@ -161,51 +165,64 @@ check unconditional.
 ### Upgrading to organization-owned API keys
 
 API keys now belong to an organization natively: `api_key.reference_id` holds the organization's
-id, and the `api_key_organization` table goes. Clients create a key with a top-level
-`organizationId` instead of `metadata.organizationId`. A key now survives the user who created it,
-and is deleted with its organization.
+id. Clients create a key with a top-level `organizationId` instead of `metadata.organizationId`. A
+key now survives the user who created it, and is deleted with its organization by the foreign key
+described below, even when the organization row is deleted directly in SQL.
 
-Existing keys still reference their creator's user id: no organization lists them and no one can
-revoke them until they are moved to their organization. Run these statements, in one transaction:
+The upgrade is automatic: there is no SQL to run by hand and no need to stop the app. NuxtHub runs
+`server/db/queries/api-key-organization-owner.postgresql.sql` after all migrations, on every
+`pnpm build` with `DATABASE_URL` set, every `npx nuxt db migrate` and every `pnpm dev` start. It is
+a single statement, so it either applies in full or changes nothing. It:
+
+1. locks `api_key` against writes from the release still running;
+2. moves every key listed in `api_key_organization` to its organization (`reference_id`), with its
+   key material unchanged, so clients keep using the same key;
+3. deletes the keys that belong to no organization and are disabled (`enabled = false`);
+4. refuses while any other key belongs to no organization (see below);
+5. adds the foreign key `api_key_reference_id_organization_id_fk`
+   (`api_key.reference_id` → `organization.id`, `ON DELETE CASCADE`) if it is missing.
+
+Once the foreign key exists, the query has nothing left to do, so running it on every build is
+harmless. During a rolling deploy the previous release keeps serving requests; once the foreign key
+exists, its key creation fails (it writes the creator's user id as `reference_id`), so it cannot
+create a key that belongs to no organization. Nothing else in it breaks: `api_key_organization`
+is still there.
+
+**When the query refuses**, the build (`pnpm build`) and `npx nuxt db migrate` stop with a non-zero
+exit code and a message that gives the number of keys concerned; `pnpm dev` only logs the error and
+keeps running. Those keys were never linked to an organization, so no one could already list or
+revoke them before this release. List them with the query from the message:
 
 ```sql
-BEGIN;
-UPDATE "api_key" SET "reference_id" = l."organization_id"
-FROM "api_key_organization" l
-WHERE l."api_key_id" = "api_key"."id";
-DELETE FROM "api_key"
-WHERE NOT EXISTS (
-  SELECT 1 FROM "api_key_organization" l WHERE l."api_key_id" = "api_key"."id"
-);
-COMMIT;
+SELECT id, reference_id FROM api_key
+WHERE NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = api_key.reference_id);
 ```
 
-The `DELETE` removes the legacy keys that were never linked to an organization: they were already
-hidden from every listing, and an owner or admin must recreate them.
+Then, for each key, either delete it (an owner or admin of the organization recreates it if it is
+still needed):
 
-- **Deployment already on the better-auth 1.7 schema** (it has `api_key` and
-  `api_key_organization`): the migration `pnpm db:generate` writes for this change is
-  `DROP TABLE "api_key_organization" CASCADE`, which loses the links, and it is applied by
-  `pnpm build` when `DATABASE_URL` is set (`applyMigrationsDuringBuild`), by `pnpm dev` on start
-  and by `npx nuxt db migrate`. So:
-  1. Stop the running app, or at least API key creation: until the new code is deployed, the old
-     one keeps creating keys owned by their creator and linked through `api_key_organization`.
-  2. Run the statements against the database.
-  3. Run `pnpm db:generate`, build and deploy as usual.
-  4. Delete any key the DROP left without an organization (one created between steps 2 and 3, if
-     the app kept running): `verifyApiKey` would still accept it, but no one can list or revoke it.
+```sql
+DELETE FROM "api_key" WHERE "id" = '<key id>';
+```
 
-     ```sql
-     DELETE FROM "api_key" WHERE "reference_id" NOT IN (SELECT "id" FROM "organization");
-     ```
-- **Deployment upgrading from the better-auth 1.4 schema in one go**: `pnpm db:generate` writes a
-  single migration that copies `apiKey` into `api_key` and drops `api_key_organization`. Follow
-  [Upgrading from better-auth 1.4](#upgrading-from-better-auth-14): put the copy of its step 1,
-  then the `UPDATE` and `DELETE` statements, each ending with `;--> statement-breakpoint`, before
-  the first generated statement that drops or alters `apiKey` or `api_key_organization` (the
-  generator may order `DROP TABLE "api_key_organization" CASCADE` before the `ALTER TABLE "apiKey"`
-  lines). NuxtHub applies a migration statement by statement, not in one transaction, so back up
-  the database first.
+or move it to its organization:
+
+```sql
+UPDATE "api_key" SET "reference_id" = '<organization id>' WHERE "id" = '<key id>';
+```
+
+(inserting the pair into `api_key_organization` works too: the query moves it). Then run the build
+or `npx nuxt db migrate` again.
+
+The foreign key is created by this query, not by drizzle-kit: better-auth's API key schema option
+only renames fields, and `pnpm auth:schema` regenerates `server/db/schema/auth.ts`, so the
+constraint cannot be declared there. It is not in the drizzle snapshots, and `pnpm db:generate`
+never touches it.
+
+`api_key_organization` stays in the Drizzle schema, deprecated and no longer read or written by the
+app, so that `pnpm db:generate` emits no `DROP TABLE` before the query has moved the keys. A later
+release removes it ([#162](https://github.com/juherr/nuxt-saas-starter/issues/162)): upgrade
+every deployment through this release first.
 
 ### Environment Variables
 

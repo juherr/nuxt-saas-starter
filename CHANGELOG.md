@@ -39,13 +39,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** API keys are owned by their organization through better-auth's API key plugin
-  (`api_key.reference_id` holds the organization id); the `api_key_organization` table and
-  its backfill script are removed. Stop the app and, before building, run the SQL of
+  (`api_key.reference_id` holds the organization id), and the backfill script is removed. The
+  build, `npx nuxt db migrate` and `pnpm dev` move the keys linked in `api_key_organization` to
+  their organization, with no SQL to run by hand and without stopping the app, and delete the
+  disabled keys that belong to no organization. They refuse, changing nothing, while an enabled
+  key belongs to no organization: such a key was already unlisted and could not be revoked; delete
+  it or move it to its organization as
   [Upgrading to organization-owned API keys](README.md#upgrading-to-organization-owned-api-keys)
-  (or add it to the generated migration when upgrading from better-auth 1.4 in one go): it moves
-  linked keys to their organization and deletes the keys never linked. Clients create a key with a
-  top-level `organizationId` instead of `metadata.organizationId`. A key now survives the user who
-  created it and is deleted with its organization
+  explains, then build again. `api_key_organization` stays, deprecated, until
+  [#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it, so upgrade every
+  deployment through this release. Deleting an organization deletes its keys through a database
+  foreign key, and a key now survives the user who created it. Clients create a key with a
+  top-level `organizationId` instead of `metadata.organizationId`
   ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145))
 - `pnpm typecheck` is a blocking CI check and must stay at zero errors
   ([#98](https://github.com/juherr/nuxt-saas-starter/pull/98))

@@ -73,7 +73,10 @@ A production-ready Nuxt SaaS starter with authentication, billing, teams, and mo
 ## Quick Start
 
 The toolchain is installed with [mise](https://mise.jdx.dev): `mise.toml` pins Node, and pnpm is
-pinned only by `packageManager` in `package.json`, run through Corepack.
+pinned only by `packageManager` in `package.json`, run through Corepack. The commands after
+`corepack enable` assume mise is [activated](https://mise.jdx.dev/getting-started.html) in your shell
+(`eval "$(mise activate bash)"`, or `zsh`); otherwise prefix each with `mise exec --`. If
+`mise install` asks you to trust the config on a fresh clone, run `mise trust` first.
 
 ```bash
 mise install                             # Node from mise.toml

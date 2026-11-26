@@ -121,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries provenance; as a last resort, once the release is checked as legitimate, list its exact
   `name@version` under `trustPolicyExclude` in `pnpm-workspace.yaml`
   ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
+- A refused organization switch, such as one opened from another site's link, no longer makes
+  the organization middleware redirect between organizations forever, which kept a server
+  worker busy during server rendering. It now returns to the active organization when the user
+  belongs to it, else shows the access-denied page
+  ([#153](https://github.com/juherr/nuxt-saas-starter/pull/153))
 
 ## [0.1.0] - 2026-11-18
 

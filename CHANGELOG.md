@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what to fix when the admin cannot be created or a setting is missing, and an unreachable
   database fails after 10 seconds instead of hanging (`NUXT_DATABASE_CONNECT_TIMEOUT_MS`)
   ([#133](https://github.com/juherr/nuxt-saas-starter/pull/133))
+- The Node self-hosting guide explains that the default `fs-lite` KV driver never removes expired
+  sessions and rate-limit counters, recommends Redis in production, and gives a cron-able `find`
+  command that clears them from `.data/kv`
+  ([#134](https://github.com/juherr/nuxt-saas-starter/pull/134))
 
 ## [0.1.0] - 2026-11-18
 

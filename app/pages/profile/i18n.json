@@ -4,6 +4,10 @@
       "back": "Back",
       "anonymousUser": "Anonymous User",
       "role": "Role",
+      "roles": {
+        "user": "User",
+        "admin": "Administrator"
+      },
       "emailVerified": "Email Verified",
       "verified": "Verified",
       "notVerified": "Not Verified",
@@ -23,6 +27,10 @@
       "back": "返回",
       "anonymousUser": "匿名用户",
       "role": "角色",
+      "roles": {
+        "user": "普通用户",
+        "admin": "管理员"
+      },
       "emailVerified": "邮箱验证",
       "verified": "已验证",
       "notVerified": "未验证",
@@ -42,6 +50,10 @@
       "back": "戻る",
       "anonymousUser": "匿名ユーザー",
       "role": "役割",
+      "roles": {
+        "user": "ユーザー",
+        "admin": "管理者"
+      },
       "emailVerified": "メール確認",
       "verified": "確認済み",
       "notVerified": "未確認",
@@ -61,6 +73,10 @@
       "back": "Retour",
       "anonymousUser": "Utilisateur Anonyme",
       "role": "Rôle",
+      "roles": {
+        "user": "Utilisateur",
+        "admin": "Administrateur"
+      },
       "emailVerified": "Email Vérifié",
       "verified": "Vérifié",
       "notVerified": "Non Vérifié",

@@ -37,7 +37,8 @@
         "admin": "管理后台",
         "features": "功能特性",
         "pricing": "定价方案",
-        "docs": "文档"
+        "docs": "文档",
+        "dashboard": "仪表盘"
       },
       "auth": {
         "signIn": "登录",
@@ -66,7 +67,8 @@
         "admin": "管理画面",
         "features": "機能",
         "pricing": "料金",
-        "docs": "ドキュメント"
+        "docs": "ドキュメント",
+        "dashboard": "ダッシュボード"
       },
       "auth": {
         "signIn": "ログイン",
@@ -95,7 +97,8 @@
         "admin": "Administration",
         "features": "Fonctionnalités",
         "pricing": "Tarification",
-        "docs": "Documentation"
+        "docs": "Documentation",
+        "dashboard": "Tableau de bord"
       },
       "auth": {
         "signIn": "Connexion",

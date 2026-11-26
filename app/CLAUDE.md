@@ -9,7 +9,8 @@
 - i18n: SFCs with their own strings declare `<i18n src="./i18n.json"></i18n>` (other file names exist)
   and use `const { t } = useI18n()`;
   shared strings in `i18n/global.json`; links through `useLocalePath()`. Add every key to en, fr, ja
-  and zh-CN (no `fallbackLocale`, missing keys render raw — #53).
+  and zh-CN: `fallbackLocale: 'en'` hides a gap, so `tests/unit/i18nParity.test.ts` fails on a key
+  missing from, or extra to, a locale.
 - Forms: `z` and `zodOutput` are auto-imported from `utils/types.ts`; `schema = z.object(...)` with
   translated messages, `reactive<Partial<Schema>>`, `UForm`.
 - API calls: plain `$fetch('/api/...')`; a call that runs during SSR spreads `useSsrFetchHooks()`

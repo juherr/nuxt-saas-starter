@@ -29,6 +29,19 @@ const PUBLIC_URL_VARIABLES = {
   r2: 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'
 } as const
 
+/**
+ * `value` trimmed when it is an absolute http(s) URL a browser can load,
+ * otherwise undefined.
+ */
+const browserUrl = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  if (!trimmed || !URL.canParse(trimmed)) {
+    return undefined
+  }
+  const { protocol } = new URL(trimmed)
+  return protocol === 'https:' || protocol === 'http:' ? trimmed : undefined
+}
+
 export class S3CompatibleStorageProvider implements StorageProvider {
   name = ''
   readonly missingPublicUrlVariable: string | undefined
@@ -51,10 +64,11 @@ export class S3CompatibleStorageProvider implements StorageProvider {
   }) {
     this.provider = config.provider
     this.bucketName = config.bucketName
-    this.publicUrl = config.publicUrl
+    // A blank or malformed URL counts as none: it would yield broken file URLs.
+    this.publicUrl = browserUrl(config.publicUrl)
     this.config = config
     // The bucket hostname getUrl() falls back to is not public by default.
-    this.missingPublicUrlVariable = config.publicUrl
+    this.missingPublicUrlVariable = this.publicUrl
       ? undefined
       : PUBLIC_URL_VARIABLES[config.provider]
     if (this.provider === 'r2') {

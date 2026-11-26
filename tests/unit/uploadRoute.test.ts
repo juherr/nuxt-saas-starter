@@ -167,7 +167,7 @@ describe('the upload endpoint', () => {
 
     it('answers the service\'s 503 naming the missing public URL variable, not a masked 500', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const message = 'File uploads are disabled: the file storage has no public URL. Set NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL on the server.'
+      const message = 'File uploads are disabled: the file storage has no valid public URL. Set NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL on the server.'
       uploadFile.mockRejectedValue(createError({ statusCode: 503, statusMessage: message }))
 
       const error = await upload().catch((e: unknown) => e)

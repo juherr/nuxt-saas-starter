@@ -65,7 +65,7 @@ export class FileService {
     if (missingVariable) {
       throw createError({
         statusCode: 503,
-        statusMessage: `File uploads are disabled: the file storage has no public URL. Set ${missingVariable} on the server.`
+        statusMessage: `File uploads are disabled: the file storage has no valid public URL. Set ${missingVariable} on the server.`
       })
     }
 

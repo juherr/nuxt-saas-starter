@@ -24,6 +24,9 @@ fi
 jar=$1-cookies.txt
 welcome="Welcome back, $2!"
 : "${NUXT_APP_URL:?NUXT_APP_URL must be set}"
+[[ $NUXT_APP_URL =~ ^https?://[^/]+ ]] \
+  || { echo "::error::NUXT_APP_URL is not an http(s) URL: $NUXT_APP_URL"; exit 2; }
+app_origin=${BASH_REMATCH[0]}
 # Neither a trusted origin (server/utils/auth.ts) nor the app port.
 foreign=127.0.0.1:4999
 
@@ -138,17 +141,25 @@ echo "SSR pages rendered for referer, typed and foreign without a refused set-ac
 token_cookie=$(printf '%s' "$cookie" | tr ';' '\n' | sed 's/^ *//' \
   | grep '^better-auth\.session_token=') || fail "no session token in $jar"
 check_refused() {
-  local variant=$1 expected=$2 before=$3 status location active
+  local variant=$1 expected=$2 before=$3 status location path active
   status=$(curl -sS --max-time 30 -o "ssr-$variant-body.txt" -D "ssr-$variant-headers.txt" \
     -w '%{http_code}' -H "Cookie: $token_cookie" -H 'Sec-Fetch-Site: cross-site' \
     "$NUXT_APP_URL/smoke-ssr-refused/dashboard") \
     || fail "$variant page request failed or ran past 30 seconds"
-  location=$(sed -n 's/^[Ll]ocation: *//p' "ssr-$variant-headers.txt" \
-    | tr -d '\r' | sed -E 's|^https?://[^/]+||')
+  location=$(sed -n 's/^[Ll]ocation: *//p' "ssr-$variant-headers.txt" | tr -d '\r')
   echo "$variant page status: $status, location: $location"
   [ "$status" = "302" ] || fail "$variant page answered $status instead of 302"
-  [ "$location" = "$expected" ] \
-    || fail "$variant page redirected to '$location', not $expected"
+  # navigateTo sends a path for an internal route; an absolute URL is only
+  # accepted on the app's own origin, since another host is what this
+  # script exists to catch. `//host/...` is a network-path reference.
+  case "$location" in
+    //*) fail "$variant page redirected off the app origin, to '$location'" ;;
+    /*) path=$location ;;
+    "$app_origin"/*) path=${location#"$app_origin"} ;;
+    *) fail "$variant page redirected off the app origin $app_origin, to '$location'" ;;
+  esac
+  [ "$path" = "$expected" ] \
+    || fail "$variant page redirected to '$path', not $expected"
   active=$(active_org) || fail "$variant get-session request failed"
   [ "$active" = "$before" ] \
     || fail "after the $variant page the active organization is '$active', not '$before'"

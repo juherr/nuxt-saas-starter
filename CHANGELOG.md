@@ -45,8 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`shellEmulator`), so POSIX-style scripts behave the same on Windows
   ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
 - The toolchain is installed with [mise](https://mise.jdx.dev): `mise.toml` pins Node and replaces
-  `.nvmrc`, which is removed (run `mise install` instead of `nvm use`); pnpm stays pinned only by
-  `packageManager` in `package.json`
+  `.nvmrc`, which is removed: instead of `nvm use`, run `mise install`, then activate it with
+  `mise activate` in your shell or prefix commands with `mise exec --` (see the README); pnpm stays
+  pinned only by `packageManager` in `package.json`
   ([#140](https://github.com/juherr/nuxt-saas-starter/pull/140))
 
 ### Removed

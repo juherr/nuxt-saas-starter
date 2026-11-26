@@ -17,15 +17,11 @@ interface AuditRequest {
   bodyUserId?: unknown
 }
 
-const toUserId = (value: unknown) => {
-  if (typeof value === 'string') {
-    return value
-  }
-  if (typeof value === 'number') {
-    return String(value)
-  }
-  return undefined
-}
+// Mirrors the endpoint's `z.coerce.string()` (better-auth 1.7.25,
+// dist/plugins/admin/routes.mjs, `removeUserBodySchema`): it deletes
+// `String(value)`, so `['victim']` removes `victim` and must be logged as such.
+// Only a missing field has no target id.
+const toUserId = (value: unknown) => value === undefined ? undefined : String(value)
 
 export const resolveAuditTarget = ({ path, hasSession, sessionUserId, email, bodyUserId }: AuditRequest) => {
   // The session is the acting admin's; the target is the user being removed.

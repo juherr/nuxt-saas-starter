@@ -33,8 +33,21 @@ describe('resolveAuditTarget', () => {
       .toEqual({ targetType: 'user', targetId: '42' })
   })
 
-  it.each([undefined, { id: 'user-2' }])('has no target id on /admin/remove-user when the user id is %o', (bodyUserId) => {
+  it('coerces an array user id the way the endpoint does on /admin/remove-user', () => {
+    expect(resolveAuditTarget({ path: '/admin/remove-user', hasSession: true, sessionUserId: 'admin-1', bodyUserId: ['user-2'] }))
+      .toEqual({ targetType: 'user', targetId: 'user-2' })
+  })
+
+  it.each([
+    [{ id: 'user-2' }, '[object Object]'],
+    [null, 'null']
+  ])('coerces a %o user id to %s on /admin/remove-user', (bodyUserId, targetId) => {
     expect(resolveAuditTarget({ path: '/admin/remove-user', hasSession: true, sessionUserId: 'admin-1', bodyUserId }))
+      .toEqual({ targetType: 'user', targetId })
+  })
+
+  it('has no target id on /admin/remove-user when the user id is missing', () => {
+    expect(resolveAuditTarget({ path: '/admin/remove-user', hasSession: true, sessionUserId: 'admin-1', bodyUserId: undefined }))
       .toEqual({ targetType: 'user', targetId: undefined })
   })
 

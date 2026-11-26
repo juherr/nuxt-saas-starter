@@ -17,8 +17,11 @@
 - e2e: `setup({ host: process.env.NUXT_TEST_APP_URL })` + `createPage`, run by the CI job `e2e`. Two
   users must exist: an admin (`NUXT_ADMIN_EMAIL` / `PASSWORD`, `node create-admin.ts`) and a regular
   user with a verified email (`NUXT_TEST_EMAIL` / `PASSWORD`, `.github/scripts/e2e-seed-user.sh`:
-  sign-up, then `email_verified = true`). Build with `NUXT_APP_NAME='House of BetterAuth'`
-  (`global.appName`, which the pages render). Locally: build and start the app as the job does, install
-  the browser (`pnpm exec playwright-core install --only-shell chromium`), then
+  sign-up, then `email_verified = true`). That script expects a fresh database in a Postgres container
+  (`POSTGRES_CONTAINER`, run through `docker exec`) and fails if the user already exists. The pages
+  render `global.appName` (`app/i18n/global.json`), and the tests look for it through
+  `NUXT_APP_NAME`: export `NUXT_APP_NAME='House of BetterAuth'` in the shell that runs vitest (the
+  build reads it only for a meta tag). Locally: build and start the app as the job does, install the
+  browser (`pnpm exec playwright-core install --only-shell chromium`), then
   `pnpm exec vitest run --project e2e`. A failed test leaves a screenshot of each page it opened in
   `test-results/e2e/` (`tests/e2e/setup.ts`).

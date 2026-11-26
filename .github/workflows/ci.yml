@@ -225,9 +225,10 @@ jobs:
     services:
       postgres: *postgres-service
       redis: *redis-service
-    # Throwaway values only, no repository secret. NUXT_APP_NAME is read
-    # at build time and must equal global.appName in
-    # app/i18n/global.json, which the pages render and the tests expect.
+    # Throwaway values only, no repository secret. The pages render
+    # global.appName from app/i18n/global.json; the build reads
+    # NUXT_APP_NAME only for a meta tag. The e2e tests read NUXT_APP_NAME
+    # to find that title, so it must equal global.appName.
     env:
       NUXT_NITRO_PRESET: node-server
       DATABASE_URL: postgres://smoke:smoke-password@localhost:5432/smoke
@@ -268,7 +269,10 @@ jobs:
       # not downloaded. The version is the one in the lockfile.
       - name: Install the Playwright browser
         run: pnpm exec playwright-core install --with-deps --only-shell chromium
+      # Bounded below the job timeout: a hang fails this step instead of
+      # cancelling the job, so the failure() upload below still runs.
       - name: Run the e2e suite
+        timeout-minutes: 15
         run: >-
           pnpm exec vitest run --project e2e
           --reporter=default --reporter=junit

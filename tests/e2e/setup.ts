@@ -39,7 +39,7 @@ beforeEach(({ task, onTestFailed }) => {
     const name = fileSafe(task.fullName)
     await mkdir(outputDir, { recursive: true })
     await Promise.all(pages.map((page, index) =>
-      page.screenshot({ path: join(outputDir, `${name}-${index + 1}.png`), fullPage: true })
+      page.screenshot({ path: join(outputDir, `${name}-${index + 1}.png`), fullPage: true, timeout: 5_000 })
         .catch((error: unknown) => console.warn(`e2e screenshot of ${page.url()} failed:`, error))
     ))
   })

@@ -101,6 +101,12 @@ export default defineNuxtConfig({
     }
   },
   hooks: {
+    // Runs after every migration (build with a database URL, `nuxt db
+    // migrate`, `pnpm dev`): moves API keys to organization ownership and
+    // adds their foreign key, once. The file name keeps it to PostgreSQL.
+    'hub:db:queries:paths': function (queries: string[]) {
+      queries.push(fileURLToPath(new URL('./server/db/queries/api-key-organization-owner.postgresql.sql', import.meta.url)))
+    },
     'pages:extend': function (pages: NuxtPage[]) {
       const pagesToRemove: NuxtPage[] = []
       pages.forEach((page) => {

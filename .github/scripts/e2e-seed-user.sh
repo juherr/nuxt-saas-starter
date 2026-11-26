@@ -20,7 +20,7 @@ set -euo pipefail
 body=$(jq -nc --arg email "$NUXT_TEST_EMAIL" --arg password "$NUXT_TEST_PASSWORD" \
   '{name: "E2E User", email: $email, password: $password}')
 
-status=$(curl -sS -o sign-up-body.txt -w '%{http_code}' \
+status=$(curl -sS --max-time 30 -o sign-up-body.txt -w '%{http_code}' \
   -X POST "$NUXT_APP_URL/api/auth/sign-up/email" \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
@@ -35,13 +35,19 @@ if [ "$status" != "200" ]; then
   echo
   exit 1
 fi
+# By id: better-auth stores the email lowercased, so NUXT_TEST_EMAIL
+# itself may match no row.
+user_id=$(jq -er .user.id sign-up-body.txt) || {
+  echo "::error::no user id in the sign-up response"
+  exit 1
+}
 
-# The statement goes through stdin, since psql interpolates :'email'
+# The statement goes through stdin, since psql interpolates :'user_id'
 # there and not in -c. psql exits 0 on an UPDATE that matches nothing, so
 # the returned rows are counted: exactly the user just signed up.
 updated=$(docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -v ON_ERROR_STOP=1 -v email="$NUXT_TEST_EMAIL" -qtA <<'SQL' | wc -l
-UPDATE "user" SET email_verified = true WHERE email = :'email' RETURNING id;
+  -v ON_ERROR_STOP=1 -v user_id="$user_id" -qtA <<'SQL' | wc -l
+UPDATE "user" SET email_verified = true WHERE id = :'user_id' RETURNING id;
 SQL
 )
 if [ "$updated" -ne 1 ]; then

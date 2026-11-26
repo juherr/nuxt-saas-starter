@@ -109,8 +109,11 @@ async function rememberPreviousAvatar(data: { image?: string | null }, context: 
  * already updated.
  */
 async function deleteReplacedAvatar(updated: { id: string, image?: string | null } | null, context: object | null | undefined) {
-  const entry = context ? previousAvatars.get(context) : undefined
-  if (!context || !entry) {
+  if (!context) {
+    return
+  }
+  const entry = previousAvatars.get(context)
+  if (!entry) {
     return
   }
   previousAvatars.delete(context)
@@ -123,17 +126,7 @@ async function deleteReplacedAvatar(updated: { id: string, image?: string | null
       .select({ id: schema.file.id })
       .from(schema.file)
       .where(and(eq(schema.file.url, previousImage), eq(schema.file.uploadedBy, userId)))
-    if (!files.length) {
-      return
-    }
-    const fileService = await createFileService()
-    for (const { id } of files) {
-      try {
-        await fileService.deleteFile(id, userId)
-      } catch (error) {
-        console.error(`[Auth] Failed to delete the previous avatar file ${id} of user ${userId}:`, error)
-      }
-    }
+    await deleteFilesQuietly(files.map(({ id }) => id), userId, id => `the previous avatar file ${id} of user ${userId}`)
   } catch (error) {
     console.error(`[Auth] Cannot delete the previous avatar files of user ${userId}:`, error)
   }

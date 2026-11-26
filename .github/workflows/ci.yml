@@ -65,25 +65,17 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm test:ci
 
-  build-no-secrets:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: ./.github/actions/setup
-      # No database, Stripe, Resend or other secret is set: the build
-      # must succeed without them.
-      - run: pnpm build
-        env:
-          NUXT_NITRO_PRESET: node-server
-
-  # Builds and starts the Node server against throwaway PostgreSQL and Redis
-  # services, then checks the health endpoint and an email sign-in.
-  smoke-node:
+  # Builds with no database, Redis, Stripe, Resend or other secret, then
+  # deploys that build the way docs/SELF_HOSTING_NODE.md describes:
+  # `nuxt db migrate` from the checkout, and the database given to the
+  # server at start. Checks the health endpoint and an email sign-in.
+  smoke-build-without-db:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
-      postgres:
+      # Anchored here and reused by smoke-node. No Redis: without REDIS_URL
+      # at build the sessions use the fs-lite KV driver.
+      postgres: &postgres-service
         image: postgres:16
         env:
           POSTGRES_USER: smoke
@@ -96,6 +88,71 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # Throwaway values only. No variable the build reads is set at job
+    # level (DATABASE_URL, POSTGRES_URL, REDIS_URL, NUXT_APP_URL): steps
+    # take these under their own names.
+    env:
+      SMOKE_DATABASE_URL: postgres://smoke:smoke-password@localhost:5432/smoke
+      SMOKE_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      # Built before the migrations exist, as from a fresh clone.
+      - name: Build without a database
+        run: pnpm build
+        env:
+          NUXT_NITRO_PRESET: node-server
+      - name: Generate migrations
+        run: pnpm db:generate
+      # Runs `nuxt prepare` in the checkout and applies the generated
+      # server/db/migrations, so it needs the sources, not .output.
+      - name: Apply the migrations with nuxt db migrate
+        run: pnpm exec nuxt db migrate
+        env:
+          DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+      # The build baked an empty databaseUrl and baseURL into .output, so
+      # the server reads them from their runtime overrides: DATABASE_URL
+      # alone leaves /api/health at 503 (docs/SELF_HOSTING_NODE.md).
+      - name: Start the server
+        run: node .output/server/index.mjs > server.log 2>&1 &
+        env:
+          NUXT_DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+          NUXT_PUBLIC_BASE_URL: ${{ env.SMOKE_APP_URL }}
+          NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
+          PORT: 3000
+      - name: Wait for /api/health
+        run: .github/scripts/smoke-wait-health.sh
+        env:
+          NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
+      - name: Seed a user
+        run: node create-admin.ts
+        env:
+          DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+          NUXT_ADMIN_EMAIL: smoke-admin@example.com
+          NUXT_ADMIN_PASSWORD: smoke-admin-password
+      - name: Sign in with email and password
+        run: .github/scripts/smoke-sign-in.sh sign-in smoke-admin@example.com smoke-admin-password
+        env:
+          NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
+      # The cookie jar is left out: it holds a session only after a
+      # successful sign-in, and the headers already show the cookie.
+      - name: Upload the server log and smoke responses
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smoke-build-without-db-server-log
+          path: |
+            server.log
+            sign-in-headers.txt
+            sign-in-body.txt
+
+  # Builds and starts the Node server against throwaway PostgreSQL and Redis
+  # services, then checks the health endpoint and an email sign-in.
+  smoke-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres: *postgres-service
       redis: *redis-service
     # Throwaway values only, no repository secret. NuxtHub reads
     # DATABASE_URL and REDIS_URL at build time: the first one makes the
@@ -120,15 +177,7 @@ jobs:
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
       - name: Wait for /api/health
-        run: |
-          for _ in $(seq 1 60); do
-            if curl -fsS "$NUXT_APP_URL/api/health"; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::/api/health never answered ok"
-          exit 1
+        run: .github/scripts/smoke-wait-health.sh
       - name: Reset the database to the demo seed
         env:
           DEMO_RESET_CONFIRM: localhost
@@ -136,34 +185,7 @@ jobs:
       - name: Seed a user
         run: node create-admin.ts
       - name: Sign in with email and password
-        run: |
-          status=$(curl -sS -o sign-in-body.txt -D sign-in-headers.txt \
-            -w '%{http_code}' -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
-            -H 'Content-Type: application/json' \
-            -H "Origin: $NUXT_APP_URL" \
-            -d "{\"email\":\"$NUXT_ADMIN_EMAIL\",\"password\":\"$NUXT_ADMIN_PASSWORD\"}")
-          echo "sign-in status: $status"
-          # On failure no session exists, so the headers and body hold
-          # nothing secret and are printed as they are.
-          show_response() {
-            echo "--- sign-in response headers ---"
-            cat sign-in-headers.txt
-            echo "--- sign-in response body ---"
-            cat sign-in-body.txt
-            echo
-          }
-          if [ "$status" != "200" ]; then
-            echo "::error::sign-in answered $status instead of 200"
-            show_response
-            exit 1
-          fi
-          # Without HTTPS, better-auth names the cookie without the
-          # __Secure- prefix.
-          if ! grep -qi '^set-cookie: better-auth\.session_token=' sign-in-headers.txt; then
-            echo "::error::no better-auth session cookie in the sign-in response"
-            show_response
-            exit 1
-          fi
+        run: .github/scripts/smoke-sign-in.sh sign-in "$NUXT_ADMIN_EMAIL" "$NUXT_ADMIN_PASSWORD"
       # A second reset proves it is idempotent over a seeded database. It
       # wipes smoke-admin too, hence after the admin sign-in.
       - name: Reset the database to the demo seed again
@@ -171,32 +193,7 @@ jobs:
           DEMO_RESET_CONFIRM: localhost
         run: pnpm demo:reset
       - name: Sign in with the demo account
-        run: |
-          status=$(curl -sS -o demo-sign-in-body.txt -D demo-sign-in-headers.txt \
-            -w '%{http_code}' -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
-            -H 'Content-Type: application/json' \
-            -H "Origin: $NUXT_APP_URL" \
-            -d '{"email":"demo@example.com","password":"demo-password"}')
-          echo "demo sign-in status: $status"
-          # On failure no session exists, so the headers and body hold
-          # nothing secret and are printed as they are.
-          show_response() {
-            echo "--- demo sign-in response headers ---"
-            cat demo-sign-in-headers.txt
-            echo "--- demo sign-in response body ---"
-            cat demo-sign-in-body.txt
-            echo
-          }
-          if [ "$status" != "200" ]; then
-            echo "::error::demo sign-in answered $status instead of 200"
-            show_response
-            exit 1
-          fi
-          if ! grep -qi '^set-cookie: better-auth\.session_token=' demo-sign-in-headers.txt; then
-            echo "::error::no better-auth session cookie in the demo sign-in response"
-            show_response
-            exit 1
-          fi
+        run: .github/scripts/smoke-sign-in.sh demo-sign-in demo@example.com demo-password
       - name: Upload the server log and smoke responses
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

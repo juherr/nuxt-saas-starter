@@ -30,6 +30,7 @@
       "emailNotVerifiedDesc": "Please verify your email address to continue.",
       "sendEmail": "Send Verification Email",
       "sendEmailSuccess": "Verification email has been sent",
+      "resendEmailNeutral": "If this address needs verification, an email is on its way.",
       "sendEmailError": "Failed to send verification email"
     }
   },
@@ -67,6 +68,7 @@
       "resendEmailError": "发送验证邮件失败",
       "sendEmail": "发送验证邮件",
       "sendEmailSuccess": "验证邮件已发送",
+      "resendEmailNeutral": "如果该地址需要验证，验证邮件正在发送中。",
       "sendEmailError": "发送验证邮件失败"
     }
   },
@@ -104,6 +106,7 @@
       "resendEmailError": "確認メールの送信に失敗しました",
       "sendEmail": "認証メールを送信",
       "sendEmailSuccess": "認証メールを送信しました",
+      "resendEmailNeutral": "このアドレスの確認が必要な場合は、メールをお送りします。",
       "sendEmailError": "認証メールの送信に失敗しました"
     }
   },
@@ -141,6 +144,7 @@
       "resendEmailError": "Échec de l'envoi de l'e-mail de vérification",
       "sendEmail": "Envoyer l'e-mail de vérification",
       "sendEmailSuccess": "L'e-mail de vérification a été envoyé",
+      "resendEmailNeutral": "Si cette adresse doit être vérifiée, un e-mail est en route.",
       "sendEmailError": "Échec de l'envoi de l'e-mail de vérification"
     }
   }

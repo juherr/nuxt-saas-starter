@@ -508,7 +508,11 @@ export const createBetterAuth = () => betterAuth({
           throw new Error(response.error.message)
         }
       } catch (e) {
-        console.warn('Failed to send verification email:', e)
+        // Swallowed on purpose: better-auth only calls this hook for an
+        // unverified address and rethrows what it throws, so throwing would
+        // reveal that the account exists. The client copy stays neutral.
+        const message = e instanceof Error ? e.message : String(e)
+        console.error(`Failed to send verification email: ${message}`)
       }
     }
   },

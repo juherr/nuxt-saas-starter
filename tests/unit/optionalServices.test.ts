@@ -294,6 +294,37 @@ describe('optional services', () => {
       expect(loggedText()).not.toContain(token)
     })
 
+    // better-auth's unauthenticated resend only calls this hook for an
+    // unverified address and rethrows what it throws: resolving keeps the
+    // endpoint's answer identical for unknown, verified and unverified
+    // addresses, so the failure is only logged as an error.
+    describe('resolves without revealing the account, and logs an error, when', () => {
+      it('resend is not configured', async () => {
+        await expect(sendVerificationEmail()).resolves.toBeUndefined()
+
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send verification email: Resend is not configured'))
+      })
+
+      it('the provider answers with an error', async () => {
+        runtimeConfig.resendApiKey = 're_canary_key'
+        await stubResendSend({ error: { message: 'provider down' } })
+
+        await expect(sendVerificationEmail()).resolves.toBeUndefined()
+
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send verification email: provider down'))
+      })
+
+      it('the provider request rejects', async () => {
+        runtimeConfig.resendApiKey = 're_canary_key'
+        const { getResendClient } = await import('~~/server/utils/drivers')
+        vi.spyOn(getResendClient()!.emails, 'send').mockRejectedValue(new Error('socket hang up'))
+
+        await expect(sendVerificationEmail()).resolves.toBeUndefined()
+
+        expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send verification email: socket hang up'))
+      })
+    })
+
     it('logs the link in development so sign-up works without Resend', async () => {
       runtimeConfig.public.appEnv = 'development'
 

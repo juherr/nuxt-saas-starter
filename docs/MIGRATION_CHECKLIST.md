@@ -234,79 +234,30 @@ npx nuxt db mark-as-migrated 0001_migration_name
 
 ## API Keys Scoped to Their Organization
 
-API keys now belong to exactly one organization through the `api_key_organization` table
-(`server/db/schema/apiKeyOrganization.ts`). Keys were previously matched by searching their
-`metadata` text for the organization id, which is not a reliable tenant boundary. Existing keys
-need a one-off backfill.
+API keys belong to exactly one organization: better-auth's API key plugin stores the
+organization's id in `api_key.reference_id` (`references: 'organization'`), checks the caller's
+`apiKey` permission in that organization when a key is created, and the
+`api_key_organization` table is gone. Deployments that linked their keys through that table move
+them with one SQL transaction before the next build.
 
-- [ ] Generate the migration that creates `api_key_organization` (`server/db/migrations` is
-  gitignored, so each deployment generates its own):
+- [ ] Follow [Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys):
+  run its statements **before building** (the build applies the generated
+  `DROP TABLE "api_key_organization"`), or, when upgrading from the better-auth 1.4 schema in one
+  go, add them to the generated migration before that line.
+- [ ] Tell the affected users. Keys that were never linked to an organization are deleted by that
+  transaction; an owner or admin must recreate them.
+- [ ] Update API clients: a key is created with a top-level `organizationId`
+  (`POST /api/auth/api-key/create`), not `metadata.organizationId`; a request without it gets 400
+  `ORGANIZATION_ID_REQUIRED`.
 
-```bash
-pnpm db:generate
-```
-
-- [ ] Apply it through NuxtHub, never with `pnpm db:migrate` (see
-  [Self-Hosting on Node.js](./SELF_HOSTING_NODE.md#1-database-migrations)):
-
-```bash
-DATABASE_URL=postgres://user:password@host:5432/database npx nuxt db migrate
-```
-
-- [ ] Backfill the existing keys:
-
-```bash
-DATABASE_URL=postgres://user:password@host:5432/database pnpm db:backfill-api-keys
-```
-
-The script reads each key's `metadata` (a JSON object, or a JSON string of a JSON object as
-older clients stored it), never the key itself, and prints one line of counts, then one line
-about the keys left without an organization:
-
-| Count | Meaning |
-|-------|---------|
-| `scanned` | API keys read. |
-| `linked` | Keys linked to their organization by this run. |
-| `already-linked` | Keys that already had an organization; left unchanged. |
-| `skipped-invalid` | Metadata missing, not JSON, or without a non-empty string `organizationId`. |
-| `skipped-unknown-org` | The organization named in the metadata does not exist. |
-| `skipped-not-manager` | The key's owner is not currently `owner` or `admin` of that organization. |
-| `enabled-unlinked` | Keys without an organization that still work, followed by their ids. |
-
-The script is idempotent: run it again at any time, linked keys stay as they are. A second run
-reports the same skipped counts, since skipped keys are not changed.
-
-- [ ] Review the `enabled-unlinked` ids. A key without an organization no longer appears in any
-  listing and cannot be revoked by anyone, yet it still authenticates until it is disabled.
-
-- [ ] Disable them by running the backfill again with `--disable-unlinked`:
-
-```bash
-DATABASE_URL=postgres://user:password@host:5432/database pnpm db:backfill-api-keys --disable-unlinked
-```
-
-After linking, it sets `enabled = false` on every key that has no organization and prints
-`disabled-unlinked=<count>` instead of the ids. Any other argument is refused.
-
-- [ ] Tell the affected users. Organization API key listings only show linked keys, matched
-  exactly on the organization id; there is no fallback on metadata. Skipped keys, including those
-  whose owner is no longer `owner` or `admin` of the organization, no longer appear; once disabled
-  they stop working, and an owner or admin must recreate them.
-
-New keys are linked when they are created. Only an `owner` or `admin` of the organization named
-in the request's `metadata.organizationId` may create one; the id must match exactly, an id with
-surrounding whitespace is refused. Creating the key and linking it are
-not one transaction: if the link cannot be written, the request fails without returning the key,
-and the stored key stays unlisted with no one holding its plaintext (it fails closed). The API key plugin's own
-`/api-key/get`, `/api-key/list`, `/api-key/update` and `/api-key/delete` endpoints are disabled:
-keys are listed and revoked through `/api/organization/api-keys`, which check the caller's role
-in the key's organization.
-
-Deleting an organization through better-auth deletes its API keys first (the organization
-plugin's `beforeDeleteOrganization` hook), so no key outlives its organization. If that deletion
-fails, the organization is not deleted. An organization row removed directly in the database
-skips the hook: its links go with it, and its keys stay enabled with no organization. Run the
-backfill with `--disable-unlinked` afterwards to disable them.
+Only an `owner` or `admin` of the organization may create, list or revoke its keys. The API key
+plugin's own `/api-key/get`, `/api-key/list`, `/api-key/update` and `/api-key/delete` endpoints are
+disabled: keys are listed and revoked through `/api/organization/api-keys`, which check the
+caller's role in the key's organization and never return the key itself. A key survives the user
+who created it; deleting an organization through better-auth deletes its keys first (the
+organization plugin's `beforeDeleteOrganization` hook). An organization row removed directly in
+the database skips the hook: delete its keys with
+`DELETE FROM "api_key" WHERE "reference_id" = '<organization id>'`.
 
 ---
 

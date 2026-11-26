@@ -126,18 +126,16 @@ The generated migration then ends with `DROP TABLE "apiKey" CASCADE`, which lose
    UPDATE "subscription" SET "status" = 'incomplete' WHERE "status" IS NULL;--> statement-breakpoint
    ```
 
-3. If `api_key_organization` already exists (see "API Keys Scoped to Their Organization" in
-   [the migration checklist](./docs/MIGRATION_CHECKLIST.md)), its foreign key points at `apiKey`,
-   and `DROP TABLE "apiKey" CASCADE` drops that constraint. Check that the file adds a foreign key
-   from `api_key_organization` to `api_key` after the copy of step 1: the copy keeps the key ids,
-   so the links stay valid. Run `pnpm db:backfill-api-keys` only after this migration: the script
-   reads `api_key`.
+3. If `api_key_organization` exists, the same file also ends with
+   `DROP TABLE "api_key_organization" CASCADE`: add the statements of
+   [Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) after the
+   copy of step 1 and before that line, or every key copied in step 1 still references its creator
+   and no organization lists it.
 
 Then apply it (`npx nuxt db migrate`, or `pnpm build`). The same migration also adds
 `user.stripe_customer_id` and the `subscription` columns `cancel_at`, `canceled_at`, `ended_at`,
-`billing_interval` and `stripe_schedule_id`. API keys no longer have a foreign key to `user`: the
-database no longer cascades the deletion of a user to their keys, so the app deletes them in a
-`databaseHooks.user.delete.before` hook (`server/utils/auth.ts`).
+`billing_interval` and `stripe_schedule_id`. API keys no longer have a foreign key to `user`: an
+API key belongs to its organization, and deleting the organization deletes its keys.
 
 Single-use verification values are now written to the database as well as the KV store, and consumed
 from the database. Password reset and account deletion links issued before the deploy become
@@ -158,6 +156,43 @@ user signs in with their password and verifies their email first. Setting the op
 restores the old behaviour and lets whoever registered an unverified account at someone else's
 address receive that person's OAuth sign-in; better-auth deprecates the option and plans to make the
 check unconditional.
+
+### Upgrading to organization-owned API keys
+
+API keys now belong to an organization natively: `api_key.reference_id` holds the organization's
+id, and the `api_key_organization` table goes. Clients create a key with a top-level
+`organizationId` instead of `metadata.organizationId`. A key now survives the user who created it,
+and is deleted with its organization.
+
+Existing keys still reference their creator's user id: no organization lists them and no one can
+revoke them until they are moved to their organization. Run these statements, in one transaction:
+
+```sql
+BEGIN;
+UPDATE "api_key" SET "reference_id" = l."organization_id"
+FROM "api_key_organization" l
+WHERE l."api_key_id" = "api_key"."id";
+DELETE FROM "api_key"
+WHERE NOT EXISTS (
+  SELECT 1 FROM "api_key_organization" l WHERE l."api_key_id" = "api_key"."id"
+);
+COMMIT;
+```
+
+The `DELETE` removes the legacy keys that were never linked to an organization: they were already
+hidden from every listing, and an owner or admin must recreate them.
+
+- **Deployment already on the better-auth 1.7 schema** (it has `api_key` and
+  `api_key_organization`): run the statements against the database **before building**. When
+  `DATABASE_URL` is set, the build applies the migrations (`applyMigrationsDuringBuild`), and the
+  migration `pnpm db:generate` writes for this change is `DROP TABLE "api_key_organization"
+  CASCADE`, which loses the links. Then run `pnpm db:generate` and build as usual.
+- **Deployment upgrading from the better-auth 1.4 schema in one go**: `pnpm db:generate` writes a
+  single migration that copies `apiKey` into `api_key` and drops `api_key_organization`. Follow
+  [Upgrading from better-auth 1.4](#upgrading-from-better-auth-14) and put the `UPDATE` and
+  `DELETE` statements, each ending with `;--> statement-breakpoint`, after the copy of its step 1
+  and before `DROP TABLE "api_key_organization" CASCADE`. NuxtHub applies a migration statement by
+  statement, not in one transaction, so back up the database first.
 
 ### Environment Variables
 

@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** API keys are owned by their organization through better-auth's API key plugin
+  (`api_key.reference_id` holds the organization id); the `api_key_organization` table and
+  its backfill script are removed. Before building, run the SQL of
+  [Upgrading to organization-owned API keys](README.md#upgrading-to-organization-owned-api-keys)
+  (or add it to the generated migration when upgrading from better-auth 1.4 in one go): it moves
+  linked keys to their organization and deletes the keys never linked. Clients create a key with a
+  top-level `organizationId` instead of `metadata.organizationId`. A key now survives the user who
+  created it and is deleted with its organization
 - `pnpm typecheck` is a blocking CI check and must stay at zero errors
   ([#98](https://github.com/juherr/nuxt-saas-starter/pull/98))
 - Rename the package to `nuxt-saas-starter`, declare it MIT in `package.json`, restore the NuxSaaS

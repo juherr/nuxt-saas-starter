@@ -78,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The dashboard's profile settings page and its notifications follow the selected language
   (English, French, Japanese or Simplified Chinese) instead of always showing English
   ([#127](https://github.com/juherr/nuxt-saas-starter/pull/127))
+- Billing previews show the real next billing date: the trial end while trialing, and the current
+  period end for a seat change on a yearly plan instead of a date a year from now
+  ([#130](https://github.com/juherr/nuxt-saas-starter/pull/130))
 
 ## [0.1.0] - 2026-11-18
 

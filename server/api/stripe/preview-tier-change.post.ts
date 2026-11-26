@@ -6,7 +6,7 @@ import { findOrganization, requireAuthSession, requireOrganizationRole, selectAc
 import { useDB } from '~~/server/utils/db'
 import { createStripeClient } from '~~/server/utils/stripe'
 import { requireSubscriptionItem } from '~~/server/utils/stripeSubscriptionItem'
-import { getStripeSubscriptionPeriodEnd, getStripeSubscriptionPeriodEndSeconds } from '~~/server/utils/stripeSubscriptionPeriod'
+import { getStripeSubscriptionPeriodEnd } from '~~/server/utils/stripeSubscriptionPeriod'
 import { getPlanByStripePriceId, getTierForInterval, PLAN_TIERS } from '~~/shared/utils/plans'
 
 export default defineEventHandler(async (event) => {
@@ -105,34 +105,7 @@ export default defineEventHandler(async (event) => {
   // All plan tier downgrades are scheduled at period end (no credit)
   // This prevents revenue loss - users keep features until renewal
   if (isScheduledDowngrade) {
-    // Retrieve the full subscription to get current_period_end
-    const fullSubscription = await stripe.subscriptions.retrieve(subscription.id)
-    let periodEndTimestamp = getStripeSubscriptionPeriodEndSeconds(fullSubscription)
-
-    console.log('[preview-tier-change] Full subscription keys:', Object.keys(fullSubscription))
-    console.log('[preview-tier-change] billing_cycle_anchor:', (fullSubscription as any).billing_cycle_anchor)
-    console.log('[preview-tier-change] current_period_end:', periodEndTimestamp)
-    console.log('[preview-tier-change] current_period_start:', (fullSubscription as any).current_period_start)
-
-    // Try billing_cycle_anchor if current_period_end doesn't exist
-    if (!periodEndTimestamp) {
-      // Calculate next period from billing_cycle_anchor
-      const anchor = (fullSubscription as any).billing_cycle_anchor
-      const interval = (fullSubscription as any).plan?.interval || 'month'
-      if (anchor) {
-        const anchorDate = new Date(anchor * 1000)
-        if (interval === 'year') {
-          anchorDate.setFullYear(anchorDate.getFullYear() + 1)
-        } else {
-          anchorDate.setMonth(anchorDate.getMonth() + 1)
-        }
-        periodEndTimestamp = Math.floor(anchorDate.getTime() / 1000)
-      }
-    }
-
-    const periodEnd = periodEndTimestamp
-      ? new Date(periodEndTimestamp * 1000)
-      : null
+    const periodEnd = getStripeSubscriptionPeriodEnd(subscription)
     const qty = currentItem.quantity || 1
 
     console.log('[preview-tier-change] Scheduled downgrade - periodEnd:', periodEnd?.toISOString(), 'qty:', qty)

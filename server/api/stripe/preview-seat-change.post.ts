@@ -5,6 +5,7 @@ import { findOrganization, requireAuthSession, requireOrganizationRole, selectAc
 import { useDB } from '~~/server/utils/db'
 import { createStripeClient } from '~~/server/utils/stripe'
 import { requireSubscriptionItem } from '~~/server/utils/stripeSubscriptionItem'
+import { getStripeSubscriptionPeriodEndSeconds } from '~~/server/utils/stripeSubscriptionPeriod'
 import { getPlanKeyFromId, getTierForInterval } from '~~/shared/utils/plans'
 
 export default defineEventHandler(async (event) => {
@@ -97,7 +98,8 @@ export default defineEventHandler(async (event) => {
       total: totalCents,
       subtotal: totalCents,
       currency: subscription.currency || 'usd',
-      periodEnd: Math.floor(Date.now() / 1000) + (interval === 'year' ? 31536000 : 2592000),
+      // The first paid period starts when the trial ends.
+      periodEnd: subscription.trial_end ?? getStripeSubscriptionPeriodEndSeconds(subscription),
       lines: [],
       paymentMethod
     }
@@ -174,9 +176,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // For yearly upgrades, the next billing date is 1 year from now (not the current period end)
+  // A monthly subscription moving to yearly starts a new period today, so the
+  // next billing date is 1 year from now (not the current period end). A seat
+  // change on a subscription that is already yearly keeps its period.
   let periodEnd = upcomingInvoice.period_end
-  if (newInterval === 'year') {
+  if (newInterval === 'year' && currentItem.price.recurring?.interval === 'month') {
     // When upgrading to yearly, next charge is 1 year from today
     periodEnd = Math.floor(Date.now() / 1000) + 31536000 // 365 days in seconds
   }

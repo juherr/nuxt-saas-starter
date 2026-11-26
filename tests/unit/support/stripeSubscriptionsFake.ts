@@ -12,19 +12,32 @@ export interface FakeSubscription {
   id: string
   customer: string
   status: string
-  items: { data: Array<{ id: string, price: { id: string, recurring: { interval: string } }, quantity: number }> }
+  /** Since API 2025-03-31.basil the period lives on the item (stripe 23 `SubscriptionItem`). */
+  items: { data: Array<{ id: string, price: { id: string, recurring: { interval: string } }, quantity: number, current_period_end: number }> }
   default_payment_method: string
   trial_end: number | null
 }
 
+export const FAKE_TRIAL_END = 1_900_000_000
+export const FAKE_PERIOD_END = 1_800_000_000
+
 export function fakeSubscription(id: string, status: string, customer = 'cus_a'): FakeSubscription {
+  const trialEnd = status === 'trialing' ? FAKE_TRIAL_END : null
   return {
     id,
     customer,
     status,
-    items: { data: [{ id: `si_${id}`, price: { id: 'price_test_current', recurring: { interval: 'month' } }, quantity: 1 }] },
+    items: {
+      data: [{
+        id: `si_${id}`,
+        price: { id: 'price_test_current', recurring: { interval: 'month' } },
+        quantity: 1,
+        // While trialing, Stripe ends the item's period with the trial.
+        current_period_end: trialEnd ?? FAKE_PERIOD_END
+      }]
+    },
     default_payment_method: `pm_${id}`,
-    trial_end: status === 'trialing' ? 1_900_000_000 : null
+    trial_end: trialEnd
   }
 }
 

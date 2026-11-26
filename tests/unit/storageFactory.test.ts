@@ -30,3 +30,22 @@ describe('createStorageProvider', () => {
       .toThrow('S3 storage is missing NUXT_FILE_MANAGER_STORAGE_S3_ACCESS_KEY_ID, NUXT_FILE_MANAGER_STORAGE_S3_BUCKET_NAME')
   })
 })
+
+describe('the variable a storage needs before its files get a browser URL', () => {
+  const r2 = (publicUrl: string): FileManagerConfig['storage'] => ({
+    provider: 'r2',
+    r2: { accountId: 'account', accessKeyId: 'access-key', secretAccessKey: 'secret-key', bucketName: 'uploads', publicUrl }
+  })
+
+  it.each([
+    ['s3 without a public URL', s3Storage(completeS3), 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL'],
+    ['s3 with a public URL', s3Storage({ ...completeS3, publicUrl: 'https://cdn.example.test' }), undefined],
+    ['r2 without a public URL', r2(''), 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'],
+    ['r2 with a public URL', r2('https://files.example.test'), undefined],
+    ['local storage', { provider: 'local', local: { uploadDir: './uploads', publicPath: '/uploads' } } as FileManagerConfig['storage'], undefined]
+  ])('%s', async (_label, config, variable) => {
+    const provider = await createStorageProvider(config)
+
+    expect(provider.missingPublicUrlVariable).toBe(variable)
+  })
+})

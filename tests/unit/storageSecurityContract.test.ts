@@ -61,7 +61,9 @@ async function s3Compatible(): Promise<Subject> {
       accessKeyId: 'test-key',
       secretAccessKey: 'test-secret',
       bucketName: 'bucket',
-      endpoint: 'https://storage.test'
+      endpoint: 'https://storage.test',
+      // Without one, FileService refuses every upload (#120).
+      publicUrl: 'https://cdn.test'
     }),
     served: async (path) => {
       const put = puts().find(request => request.url === prefix + path)

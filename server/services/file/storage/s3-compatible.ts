@@ -23,8 +23,15 @@ export const assertStorageKey = (key: string): string => {
   return key
 }
 
+// Runtime variable that sets each provider's public URL
+const PUBLIC_URL_VARIABLES = {
+  s3: 'NUXT_FILE_MANAGER_STORAGE_S3_PUBLIC_URL',
+  r2: 'NUXT_FILE_MANAGER_STORAGE_R2_PUBLIC_URL'
+} as const
+
 export class S3CompatibleStorageProvider implements StorageProvider {
   name = ''
+  readonly missingPublicUrlVariable: string | undefined
   private client: AwsClient | null = null
   private bucketName: string
   private publicUrl?: string
@@ -46,6 +53,10 @@ export class S3CompatibleStorageProvider implements StorageProvider {
     this.bucketName = config.bucketName
     this.publicUrl = config.publicUrl
     this.config = config
+    // The bucket hostname getUrl() falls back to is not public by default.
+    this.missingPublicUrlVariable = config.publicUrl
+      ? undefined
+      : PUBLIC_URL_VARIABLES[config.provider]
     if (this.provider === 'r2') {
       this.name = 's3-r2'
     } else if (this.provider === 's3') {

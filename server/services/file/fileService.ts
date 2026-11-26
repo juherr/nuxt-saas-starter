@@ -58,6 +58,17 @@ export class FileService {
     ipAddress?: string,
     userAgent?: string
   ): Promise<FileRecord> {
+    // 503, not 500: a server-side setting the client cannot fix, and uploads
+    // stay unavailable until the operator sets it; the upload route masks a
+    // 500's message but passes this one through.
+    const missingVariable = this.storage.missingPublicUrlVariable
+    if (missingVariable) {
+      throw createError({
+        statusCode: 503,
+        statusMessage: `File uploads are disabled: the file storage has no public URL. Set ${missingVariable} on the server.`
+      })
+    }
+
     const db = await useDB()
     const fileId = uuidv7()
     const fileName = buildStorageName(this.now(), uuidv7(), detectedType.extension)

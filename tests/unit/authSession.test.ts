@@ -2,7 +2,12 @@
 import type { H3Event } from 'h3'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-const getSession = vi.hoisted(() => vi.fn(async (): Promise<unknown> => null))
+interface GetSessionOptions {
+  headers: Headers
+  query?: { disableCookieCache?: boolean }
+}
+
+const getSession = vi.hoisted(() => vi.fn(async (_opts: GetSessionOptions): Promise<unknown> => null))
 
 vi.mock('better-auth', async importOriginal => ({
   ...await importOriginal<typeof import('better-auth')>(),
@@ -22,10 +27,12 @@ vi.mock('~~/server/utils/stripe', () => ({
   setupStripe: vi.fn()
 }))
 
-const event = { headers: { cookie: 'better-auth.session_token=signed-token' } } as unknown as H3Event
+// h3 is not a direct dependency, so the tests cannot build a real event:
+// this one carries only the headers the stubbed `getRequestHeaders` reads.
+const event = { headers: new Headers({ cookie: 'better-auth.session_token=signed-token' }) } as H3Event
 
 beforeAll(() => {
-  vi.stubGlobal('getRequestHeaders', (e: { headers: Record<string, string> }) => e.headers)
+  vi.stubGlobal('getRequestHeaders', (e: { headers: Headers }) => Object.fromEntries(e.headers))
 })
 
 const { getAuthSession } = await import('~~/server/utils/auth')
@@ -44,7 +51,9 @@ describe('getAuthSession', () => {
   it('forwards the request cookies', async () => {
     await getAuthSession(event)
 
-    const [{ headers }] = getSession.mock.lastCall as unknown as [{ headers: Headers }]
-    expect(headers.get('cookie')).toBe('better-auth.session_token=signed-token')
+    const call = getSession.mock.lastCall
+    if (!call)
+      throw new Error('getSession was not called')
+    expect(call[0].headers.get('cookie')).toBe('better-auth.session_token=signed-token')
   })
 })

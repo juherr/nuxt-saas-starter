@@ -65,7 +65,12 @@
 ## Conventions
 - Stripe: `apiVersion: Stripe.API_VERSION`; read period ends through
   `server/utils/stripeSubscriptionPeriod.ts`; checkout reference, customer type and seats are decided server-side.
-- ESLint: `antfu/reasonable-newline` (#47) and antfu's pnpm rules (#48) are off on purpose.
+- ESLint: `antfu/reasonable-newline` is off on purpose (#47). antfu's pnpm rules are on: they enforce
+  `trustPolicy: no-downgrade`, `shellEmulator` and `minimumReleaseAgeExcludePrune` in `pnpm-workspace.yaml`.
+- `ERR_PNPM_TRUST_DOWNGRADE` on install: first update the lockfile to a newer release of that package
+  that carries provenance (`npm view <pkg>@<v> dist.attestations`). Last resort, once the release is
+  checked legitimate (npm page, GitHub release and tag): add its exact `name@version` (never a bare
+  name) to `trustPolicyExclude` with a comment.
 - Conventional Commits (commitlint `commit-msg` hook; PR title and commits in CI) and a Keep a
   Changelog entry under `[Unreleased]` for user-visible changes: `CONTRIBUTING.md`.
 - GitHub Actions are pinned to a commit SHA with the exact version as an end-of-line comment

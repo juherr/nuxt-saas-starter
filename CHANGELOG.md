@@ -51,8 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Upgrading to organization-owned API keys](README.md#upgrading-to-organization-owned-api-keys)
   explains, then build again. `GET /api/health` answers 503 until the upgrade has run, which a
   Cloudflare build without `DATABASE_URL` does not do: run `npx nuxt db migrate` there. On the
-  better-auth 1.4 schema, delete the generated `DROP CONSTRAINT` on `api_key_organization` before
-  applying the migration ([Upgrading from better-auth 1.4](README.md#upgrading-from-better-auth-14)).
+  better-auth 1.4 schema, the generated migration still needs editing by hand: add the copy of
+  `apiKey` into `api_key`, and delete the generated `DROP CONSTRAINT` on `api_key_organization`
+  ([Upgrading from better-auth 1.4](README.md#upgrading-from-better-auth-14)).
   `api_key_organization` stays, deprecated, until
   [#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it, so upgrade every
   deployment through this release. Deleting an organization deletes its keys through a database

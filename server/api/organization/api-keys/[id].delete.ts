@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { eq } from 'drizzle-orm'
 import { apiKey } from '~~/server/db/schema'
-import { requireApiKeyManager } from '~~/server/utils/apiKeyAccess'
-import { requireAuthSession } from '~~/server/utils/billing'
+import { requireAuthSession, requireOrganizationPermission } from '~~/server/utils/billing'
 import { useDB } from '~~/server/utils/db'
 
 const keyNotFound = () => createError({ statusCode: 404, statusMessage: 'API key not found' })
@@ -32,7 +31,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    await requireApiKeyManager(event, key.referenceId)
+    await requireOrganizationPermission(event, key.referenceId, { apiKey: ['delete'] })
   } catch (error) {
     if ((error as { statusCode?: number }).statusCode === 403) {
       throw keyNotFound()

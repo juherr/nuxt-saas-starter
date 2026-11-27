@@ -39,18 +39,31 @@ export const owner = ac.newRole({
   apiKey: ['create', 'read', 'update', 'delete']
 })
 
-/**
- * Organization roles that may create, list and revoke the organization's
- * API keys: the roles granted `apiKey` above (a test keeps them equal).
- * A role list such as `member,admin` counts when it holds one of them;
- * another casing (`Admin`) does not.
- */
-export const API_KEY_MANAGER_ROLES = ['owner', 'admin'] as const
-
 // ============================================
 // ROLE DEFINITIONS
 // ============================================
 export type OrgRole = 'owner' | 'admin' | 'member'
+
+/** The organization roles of `ac`, as handed to the organization plugin. */
+export const orgRoles = { owner, admin, member } satisfies Record<OrgRole, unknown>
+
+/** A permission request on the `ac` statement, such as `{ apiKey: ['read'] }`. */
+export type OrgPermissionRequest = Parameters<typeof owner.authorize>[0]
+
+function isOrgRole(name: string): name is OrgRole {
+  return Object.hasOwn(orgRoles, name)
+}
+
+/**
+ * Whether a member's stored role, a single role or a comma-separated role
+ * list, is granted `request` by `ac`. As in better-auth's organization
+ * plugin (`hasPermissionFn`), one role of the list must grant the whole
+ * request on its own; grants are not added up across roles. A role name
+ * absent from `ac`, another casing (`Admin`) included, grants nothing.
+ */
+export function orgRolesGrant(role: string | null | undefined, request: OrgPermissionRequest): boolean {
+  return parseRoles(role).some(name => isOrgRole(name) && orgRoles[name].authorize(request).success)
+}
 
 // ============================================
 // SUBSCRIPTION PLANS & LIMITS

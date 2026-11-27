@@ -13,7 +13,7 @@ import * as schema from '~~/server/db/schema'
 import { createFileService } from '~~/server/services/file/fileService'
 import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
-import { ac, admin, member, owner } from '~~/shared/utils/permissions'
+import { ac, orgRoles } from '~~/shared/utils/permissions'
 import { userDisplayName } from '~~/shared/utils/userDisplayName'
 import { apiKeyPluginOptions } from './apiKeyOptions'
 import { logAuditEvent } from './auditLogger'
@@ -665,11 +665,7 @@ export const createBetterAuth = () => betterAuth({
     adminPlugin(),
     organization({
       ac,
-      roles: {
-        owner,
-        admin,
-        member
-      },
+      roles: orgRoles,
       enableMetadata: true,
       organizationHooks: {
         // The plugin hands over the creator as read from the session, which

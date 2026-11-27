@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 import { eq } from 'drizzle-orm'
 import { apiKey } from '~~/server/db/schema'
-import { requireApiKeyManager } from '~~/server/utils/apiKeyAccess'
 import { toApiKeyDto } from '~~/server/utils/apiKeyDto'
-import { requireAuthSession } from '~~/server/utils/billing'
+import { requireAuthSession, requireOrganizationPermission } from '~~/server/utils/billing'
 import { useDB } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -14,7 +13,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Organization ID is required' })
   }
 
-  await requireApiKeyManager(event, organizationId)
+  await requireOrganizationPermission(event, organizationId, { apiKey: ['read'] })
 
   // The API key plugin stores the owning organization's id in reference_id.
   // Keys created before organization ownership reference their creator's

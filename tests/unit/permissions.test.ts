@@ -2,15 +2,12 @@
 import type { OrgRole } from '~~/shared/utils/permissions'
 import { describe, expect, it } from 'vitest'
 import {
-  admin,
-  API_KEY_MANAGER_ROLES,
   hasPermission,
   hasRole,
   isAdminOrOwner,
   isOwner,
   isSystemAdmin,
-  member,
-  owner,
+  orgRolesGrant,
   parseRoles,
   toggleOrgRole
 } from '~~/shared/utils/permissions'
@@ -136,17 +133,43 @@ describe('isAdminOrOwner', () => {
   })
 })
 
-// The project routes check API_KEY_MANAGER_ROLES, the API key plugin
-// checks the `apiKey` grants of `ac`: both must name the same roles.
-describe('the API key manager roles match the apiKey grants', () => {
-  const roles = { owner, admin, member }
-  const actions = ['create', 'read', 'update', 'delete'] as const
+describe('orgRolesGrant', () => {
+  it.each(['owner', 'admin', 'member,admin', 'admin, member'])('grants apiKey read and delete to "%s"', (role) => {
+    expect(orgRolesGrant(role, { apiKey: ['read'] })).toBe(true)
+    expect(orgRolesGrant(role, { apiKey: ['delete'] })).toBe(true)
+  })
 
-  it.each(Object.keys(roles) as (keyof typeof roles)[])('agrees on %s for every action', (role) => {
-    for (const action of actions) {
-      expect(roles[role].authorize({ apiKey: [action] }).success, action)
-        .toBe(hasRole(role, API_KEY_MANAGER_ROLES))
-    }
+  it.each([
+    ['an ordinary member', 'member'],
+    ['another casing', 'Admin'],
+    ['a custom role absent from ac', 'sale'],
+    ['an Object.prototype key', 'constructor'],
+    ['an empty string', ''],
+    ['separators only', ',,'],
+    ['null', null],
+    ['undefined', undefined]
+  ])('grants nothing on apiKey to %s', (_label, role) => {
+    expect(orgRolesGrant(role, { apiKey: ['read'] })).toBe(false)
+    expect(orgRolesGrant(role, { apiKey: ['delete'] })).toBe(false)
+  })
+
+  // better-auth's hasPermissionFn passes when one role of the list grants
+  // the whole request; it never adds up the grants of several roles.
+  it('grants a request that one role of the list grants on its own', () => {
+    expect(orgRolesGrant('member,owner', { billing: ['manage'] })).toBe(true)
+    expect(orgRolesGrant('member,admin', { billing: ['view'] })).toBe(false)
+  })
+
+  it('does not add up the grants of several roles', () => {
+    // owner alone may delete the organization, member alone may leave it:
+    // no single role grants both.
+    expect(orgRolesGrant('owner,member', { organization: ['delete', 'leave'] })).toBe(false)
+  })
+
+  // The API key plugin grants everything to the creator role (`owner`):
+  // owner must hold every apiKey action in ac so both answers agree.
+  it('grants owner every apiKey action', () => {
+    expect(orgRolesGrant('owner', { apiKey: ['create', 'read', 'update', 'delete'] })).toBe(true)
   })
 })
 

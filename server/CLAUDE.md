@@ -7,8 +7,9 @@
   `requireAuthSession(event)` (`utils/billing.ts`, cached per event) or `requireAuth(event)` (`utils/auth.ts`);
   `getAuthSession(event)` returns null instead of throwing.
 - Organization access: `requireOrganizationRole(event, orgId, roles?)` (`utils/billing.ts`) — same 403 for
-  non-members and wrong roles; wrappers `requireApiKeyManager` (`utils/apiKeyAccess.ts`),
-  `requireOwnedSubscription` (`utils/billing.ts`). Map 403 to 404
+  non-members and wrong roles; `requireOrganizationPermission(event, orgId, { apiKey: ['read'] })`
+  asks the `ac` grants of `shared/utils/permissions.ts` instead (what better-auth's own endpoints
+  check, so API key routes use it); wrapper `requireOwnedSubscription` (`utils/billing.ts`). Map 403 to 404
   when the resource's existence must not leak (`api/organization/api-keys/[id].delete.ts`).
 - `/api/admin*` is guarded once by `middleware/1.auth.ts` (admin role); admin routes add no check.
 - DB: `const db = await useDB()` in routes — tables from `~~/server/db/schema`, Drizzle

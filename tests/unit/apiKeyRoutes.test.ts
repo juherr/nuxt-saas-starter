@@ -103,10 +103,21 @@ describe('organization API key routes', () => {
       expect(select).not.toHaveBeenCalled()
     })
 
-    it.each(['owner', 'admin'])('lets the organization %s list its keys', async (role) => {
+    it.each(['owner', 'admin', 'member,admin'])('lets the organization %s list its keys', async (role) => {
       memberships.current = { 'org-1': role }
 
       await expect(listKeys('org-1')).resolves.toEqual([])
+    })
+
+    it.each([
+      ['an ordinary member', 'member'],
+      ['another casing of admin', 'Admin'],
+      ['a custom role absent from the access control', 'sale']
+    ])('refuses %s with 403, without listing', async (_label, role) => {
+      memberships.current = { 'org-1': role }
+
+      await expect(listKeys('org-1')).rejects.toMatchObject({ statusCode: 403 })
+      expect(select).not.toHaveBeenCalled()
     })
 
     it('lists only keys owned by exactly the requested organization, not by one whose id contains it', async () => {
@@ -171,7 +182,7 @@ describe('organization API key routes', () => {
       expect(lookup.columns).toEqual({ id: true, referenceId: true })
     })
 
-    it.each(['owner', 'admin'])('lets the %s of the key\'s organization revoke it', async (role) => {
+    it.each(['owner', 'admin', 'member,admin'])('lets the %s of the key\'s organization revoke it', async (role) => {
       memberships.current = { 'org-1': role }
       findKey.mockResolvedValue({ id: 'key-1', referenceId: 'org-1' })
 
@@ -194,6 +205,18 @@ describe('organization API key routes', () => {
       const refusal = await errorOf(deleteKey(keyId))
 
       expect(refusal).toMatchObject({ statusCode: 404, statusMessage: (unknownKeyRefusal as any).statusMessage })
+      expect(deleteFrom).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['an ordinary member', 'member'],
+      ['another casing of admin', 'Admin'],
+      ['a custom role absent from the access control', 'sale']
+    ])('answers 404 to %s of the key\'s organization, deleting nothing', async (_label, role) => {
+      memberships.current = { 'org-1': role }
+      findKey.mockResolvedValue({ id: 'key-1', referenceId: 'org-1' })
+
+      await expect(deleteKey('key-1')).rejects.toMatchObject({ statusCode: 404 })
       expect(deleteFrom).not.toHaveBeenCalled()
     })
   })

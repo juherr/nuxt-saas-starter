@@ -7,7 +7,7 @@ import { member as memberTable, organization as organizationTable, subscription 
 import { getAuthSession } from '~~/server/utils/auth'
 import { useDB } from '~~/server/utils/db'
 import { createStripeClient } from '~~/server/utils/stripe'
-import { hasRole, orgRolesGrant } from '~~/shared/utils/permissions'
+import { hasOrgRole, orgRolesGrant } from '~~/shared/utils/permissions'
 
 type Database = Awaited<ReturnType<typeof useDB>>
 
@@ -87,7 +87,7 @@ export function requireOrganizationRole(
   organizationId: string,
   roles?: readonly OrgRole[]
 ) {
-  return requireOrganizationMember(event, organizationId, role => !roles || hasRole(role, roles))
+  return requireOrganizationMember(event, organizationId, role => !roles || hasOrgRole(role, roles))
 }
 
 /**

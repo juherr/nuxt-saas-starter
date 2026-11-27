@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-import type { OrgRole } from '~~/shared/utils/permissions'
-import { describe, expect, it } from 'vitest'
+import type { OrgRole, SystemRole } from '~~/shared/utils/permissions'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  hasOrgRole,
   hasPermission,
-  hasRole,
+  hasSystemRole,
   isAdminOrOwner,
   isOwner,
   isSystemAdmin,
@@ -30,14 +31,14 @@ describe('parseRoles', () => {
   })
 })
 
-describe('hasRole with a list of wanted roles', () => {
+describe('hasOrgRole', () => {
   it.each([
     ['owner', ['owner']],
     ['owner,admin', ['owner']],
     ['admin, owner', ['owner']],
     ['admin,member', ['owner', 'admin']]
   ] satisfies [string, OrgRole[]][])('accepts "%s" for %j', (role, roles) => {
-    expect(hasRole(role, roles)).toBe(true)
+    expect(hasOrgRole(role, roles)).toBe(true)
   })
 
   it.each([
@@ -50,18 +51,23 @@ describe('hasRole with a list of wanted roles', () => {
     [undefined, ['owner']],
     ['owner', []]
   ] satisfies [string | null | undefined, OrgRole[]][])('refuses %j for %j', (role, roles) => {
-    expect(hasRole(role, roles)).toBe(false)
+    expect(hasOrgRole(role, roles)).toBe(false)
+  })
+
+  it('takes organization roles only, not system roles', () => {
+    expectTypeOf<readonly ['owner', 'admin']>().toExtend<Parameters<typeof hasOrgRole>[1]>()
+    expectTypeOf<readonly ['user']>().not.toExtend<Parameters<typeof hasOrgRole>[1]>()
   })
 })
 
-describe('hasRole with one wanted role', () => {
+describe('hasSystemRole', () => {
   it.each([
     ['a single role', 'admin'],
     ['a role list', 'admin,user'],
     ['a role list with the role last', 'user,admin'],
     ['a role list with spaces', 'user, admin']
   ])('finds admin in %s', (_label, role) => {
-    expect(hasRole(role, 'admin')).toBe(true)
+    expect(hasSystemRole(role, ['admin'])).toBe(true)
   })
 
   it.each([
@@ -75,7 +81,19 @@ describe('hasRole with one wanted role', () => {
     ['null', null],
     ['undefined', undefined]
   ])('does not find admin in %s', (_label, role) => {
-    expect(hasRole(role, 'admin')).toBe(false)
+    expect(hasSystemRole(role, ['admin'])).toBe(false)
+  })
+
+  it.each([
+    ['user', ['user', 'admin']],
+    ['user,admin', ['user']]
+  ] satisfies [string, SystemRole[]][])('accepts "%s" for %j', (role, roles) => {
+    expect(hasSystemRole(role, roles)).toBe(true)
+  })
+
+  it('takes system roles only, not organization roles', () => {
+    expectTypeOf<readonly ['admin', 'user']>().toExtend<Parameters<typeof hasSystemRole>[1]>()
+    expectTypeOf<readonly ['owner']>().not.toExtend<Parameters<typeof hasSystemRole>[1]>()
   })
 })
 

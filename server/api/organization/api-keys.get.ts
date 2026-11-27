@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 import { eq } from 'drizzle-orm'
-import { apiKey, apiKeyOrganization } from '~~/server/db/schema'
-import { requireApiKeyManager } from '~~/server/utils/apiKeyAccess'
+import { apiKey } from '~~/server/db/schema'
 import { toApiKeyDto } from '~~/server/utils/apiKeyDto'
-import { requireAuthSession } from '~~/server/utils/billing'
+import { requireAuthSession, requireOrganizationPermission } from '~~/server/utils/billing'
 import { useDB } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -14,10 +13,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Organization ID is required' })
   }
 
-  await requireApiKeyManager(event, organizationId)
+  await requireOrganizationPermission(event, organizationId, { apiKey: ['read'] })
 
-  // A key is listed only through its exact organization link. Legacy keys
-  // that were not backfilled have no link and are never listed.
+  // The API key plugin stores the owning organization's id in reference_id.
+  // Keys created before organization ownership reference their creator's
+  // user id instead, so they are never listed.
   const db = await useDB()
   const rows = await db
     .select({
@@ -31,8 +31,7 @@ export default defineEventHandler(async (event) => {
       expiresAt: apiKey.expiresAt
     })
     .from(apiKey)
-    .innerJoin(apiKeyOrganization, eq(apiKeyOrganization.apiKeyId, apiKey.id))
-    .where(eq(apiKeyOrganization.organizationId, organizationId))
+    .where(eq(apiKey.referenceId, organizationId))
 
   return rows.map(toApiKeyDto)
 })

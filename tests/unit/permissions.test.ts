@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
-import type { OrgRole } from '~~/shared/utils/permissions'
-import { describe, expect, it } from 'vitest'
-import { isApiKeyManagerRole } from '~~/server/utils/apiKeyMetadata'
+import type { OrgRole, SystemRole } from '~~/shared/utils/permissions'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  hasOrgRole,
   hasPermission,
-  hasRole,
+  hasSystemRole,
   isAdminOrOwner,
   isOwner,
   isSystemAdmin,
+  orgRolesGrant,
   parseRoles,
   toggleOrgRole
 } from '~~/shared/utils/permissions'
@@ -30,14 +31,14 @@ describe('parseRoles', () => {
   })
 })
 
-describe('hasRole with a list of wanted roles', () => {
+describe('hasOrgRole', () => {
   it.each([
     ['owner', ['owner']],
     ['owner,admin', ['owner']],
     ['admin, owner', ['owner']],
     ['admin,member', ['owner', 'admin']]
   ] satisfies [string, OrgRole[]][])('accepts "%s" for %j', (role, roles) => {
-    expect(hasRole(role, roles)).toBe(true)
+    expect(hasOrgRole(role, roles)).toBe(true)
   })
 
   it.each([
@@ -50,18 +51,23 @@ describe('hasRole with a list of wanted roles', () => {
     [undefined, ['owner']],
     ['owner', []]
   ] satisfies [string | null | undefined, OrgRole[]][])('refuses %j for %j', (role, roles) => {
-    expect(hasRole(role, roles)).toBe(false)
+    expect(hasOrgRole(role, roles)).toBe(false)
+  })
+
+  it('takes organization roles only, not system roles', () => {
+    expectTypeOf<readonly ['owner', 'admin']>().toExtend<Parameters<typeof hasOrgRole>[1]>()
+    expectTypeOf<readonly ['user']>().not.toExtend<Parameters<typeof hasOrgRole>[1]>()
   })
 })
 
-describe('hasRole with one wanted role', () => {
+describe('hasSystemRole', () => {
   it.each([
     ['a single role', 'admin'],
     ['a role list', 'admin,user'],
     ['a role list with the role last', 'user,admin'],
     ['a role list with spaces', 'user, admin']
   ])('finds admin in %s', (_label, role) => {
-    expect(hasRole(role, 'admin')).toBe(true)
+    expect(hasSystemRole(role, ['admin'])).toBe(true)
   })
 
   it.each([
@@ -75,7 +81,19 @@ describe('hasRole with one wanted role', () => {
     ['null', null],
     ['undefined', undefined]
   ])('does not find admin in %s', (_label, role) => {
-    expect(hasRole(role, 'admin')).toBe(false)
+    expect(hasSystemRole(role, ['admin'])).toBe(false)
+  })
+
+  it.each([
+    ['user', ['user', 'admin']],
+    ['user,admin', ['user']]
+  ] satisfies [string, SystemRole[]][])('accepts "%s" for %j', (role, roles) => {
+    expect(hasSystemRole(role, roles)).toBe(true)
+  })
+
+  it('takes system roles only, not organization roles', () => {
+    expectTypeOf<readonly ['admin', 'user']>().toExtend<Parameters<typeof hasSystemRole>[1]>()
+    expectTypeOf<readonly ['owner']>().not.toExtend<Parameters<typeof hasSystemRole>[1]>()
   })
 })
 
@@ -133,15 +151,44 @@ describe('isAdminOrOwner', () => {
   })
 })
 
-// apiKeyMetadata.ts stays import-free for the plain-Node backfill script,
-// so it carries its own copy of the role-list parse: keep both in step.
-describe('isApiKeyManagerRole matches hasRole', () => {
-  it.each(['owner', 'admin', 'member', 'owner,admin', 'admin, owner', 'admin,member', 'Owner', 'Admin', '', ',,', null, undefined])(
-    'agrees on %j',
-    (role) => {
-      expect(isApiKeyManagerRole(role)).toBe(hasRole(role, ['owner', 'admin']))
-    }
-  )
+describe('orgRolesGrant', () => {
+  it.each(['owner', 'admin', 'member,admin', 'admin, member'])('grants apiKey read and delete to "%s"', (role) => {
+    expect(orgRolesGrant(role, { apiKey: ['read'] })).toBe(true)
+    expect(orgRolesGrant(role, { apiKey: ['delete'] })).toBe(true)
+  })
+
+  it.each([
+    ['an ordinary member', 'member'],
+    ['another casing', 'Admin'],
+    ['a custom role absent from ac', 'sale'],
+    ['an Object.prototype key', 'constructor'],
+    ['an empty string', ''],
+    ['separators only', ',,'],
+    ['null', null],
+    ['undefined', undefined]
+  ])('grants nothing on apiKey to %s', (_label, role) => {
+    expect(orgRolesGrant(role, { apiKey: ['read'] })).toBe(false)
+    expect(orgRolesGrant(role, { apiKey: ['delete'] })).toBe(false)
+  })
+
+  // better-auth's hasPermissionFn passes when one role of the list grants
+  // the whole request; it never adds up the grants of several roles.
+  it('grants a request that one role of the list grants on its own', () => {
+    expect(orgRolesGrant('member,owner', { billing: ['manage'] })).toBe(true)
+    expect(orgRolesGrant('member,admin', { billing: ['view'] })).toBe(false)
+  })
+
+  it('does not add up the grants of several roles', () => {
+    // owner alone may delete the organization, member alone may leave it:
+    // no single role grants both.
+    expect(orgRolesGrant('owner,member', { organization: ['delete', 'leave'] })).toBe(false)
+  })
+
+  // The API key plugin grants everything to the creator role (`owner`):
+  // owner must hold every apiKey action in ac so both answers agree.
+  it('grants owner every apiKey action', () => {
+    expect(orgRolesGrant('owner', { apiKey: ['create', 'read', 'update', 'delete'] })).toBe(true)
+  })
 })
 
 describe('toggleOrgRole', () => {

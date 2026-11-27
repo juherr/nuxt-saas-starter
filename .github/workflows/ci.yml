@@ -45,9 +45,24 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The rate limiter's Redis test runs against this service; with CI set
-    # and no REDIS_URL it fails instead of skipping.
+    # The rate limiter's Redis test runs against the Redis service, the
+    # database upgrade query tests against the PostgreSQL one (each test file
+    # creates its own database through TEST_DATABASE_URL); with CI set and
+    # no REDIS_URL or TEST_DATABASE_URL they fail instead of skipping.
     services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: unit
+          POSTGRES_PASSWORD: unit-password
+          POSTGRES_DB: unit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U unit -d unit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
       # Anchored here and reused by smoke-node.
       redis: &redis-service
         image: redis:7
@@ -60,6 +75,7 @@ jobs:
           --health-retries 10
     env:
       REDIS_URL: redis://localhost:6379
+      TEST_DATABASE_URL: postgres://unit:unit-password@localhost:5432/unit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
@@ -176,6 +192,24 @@ jobs:
         run: pnpm db:generate
       - name: Build (applies the migrations through NuxtHub)
         run: pnpm build
+      # The foreign key that deletes an organization's API keys exists only
+      # once NuxtHub applies server/db/queries after the migrations: nothing
+      # else fails if that registration is lost.
+      - name: Check the API key organization foreign key (build)
+        run: |
+          node --input-type=module <<'EOF'
+          import pg from 'pg'
+          const client = new pg.Client(process.env.DATABASE_URL)
+          await client.connect()
+          const { rows } = await client.query(
+            "SELECT confdeltype FROM pg_constraint WHERE conname = 'api_key_reference_id_organization_id_fk'"
+          )
+          await client.end()
+          if (rows[0]?.confdeltype !== 'c') {
+            console.error('::error::api_key_reference_id_organization_id_fk is missing or not ON DELETE CASCADE')
+            process.exit(1)
+          }
+          EOF
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
       - name: Wait for /api/health
@@ -184,6 +218,21 @@ jobs:
         env:
           DEMO_RESET_CONFIRM: localhost
         run: pnpm demo:reset
+      - name: Check the API key organization foreign key (nuxt db migrate)
+        run: |
+          node --input-type=module <<'EOF'
+          import pg from 'pg'
+          const client = new pg.Client(process.env.DATABASE_URL)
+          await client.connect()
+          const { rows } = await client.query(
+            "SELECT confdeltype FROM pg_constraint WHERE conname = 'api_key_reference_id_organization_id_fk'"
+          )
+          await client.end()
+          if (rows[0]?.confdeltype !== 'c') {
+            console.error('::error::api_key_reference_id_organization_id_fk is missing or not ON DELETE CASCADE')
+            process.exit(1)
+          }
+          EOF
       - name: Seed a user
         run: node create-admin.ts
       - name: Sign in with email and password

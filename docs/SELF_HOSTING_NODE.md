@@ -238,10 +238,13 @@ Resend and Stripe are optional: the server starts without `NUXT_RESEND_API_KEY` 
 `NUXT_STRIPE_SECRET_KEY`. Their clients are only created when a key is set (see
 [Supported configurations](#supported-configurations) for what is disabled without them).
 
-`GET /api/health` is public and answers `{ "status": "ok" }` once `select 1` succeeds on the
-configured database. It answers `503` with `{ "status": "error" }` when no database is configured,
-when the query fails, or when it does not answer within 2 seconds, and logs the cause on the server
-only. Use it as the readiness probe of a load balancer or a container.
+`GET /api/health` is public and answers `{ "status": "ok" }` once a single query on the configured
+database succeeds and finds the foreign key `api_key_reference_id_organization_id_fk`, which the API
+key upgrade query adds after the migrations
+([Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys)).
+It answers `503` with `{ "status": "error" }` when no database is configured, when the query fails,
+when it does not answer within 2 seconds, or when that foreign key is missing, and logs the cause on
+the server only. Use it as the readiness probe of a load balancer or a container.
 
 ### Access logs
 
@@ -300,7 +303,7 @@ Only trust `X-Forwarded-*` headers set by your own proxy:
 
 | Configuration | What works | What is disabled |
 |---------------|-----------|------------------|
-| No database URL at build time | The build succeeds. | No migration is applied by the build: run `npx nuxt db migrate` with `DATABASE_URL` set, and set `NUXT_DATABASE_URL` when the server starts. Without a database at runtime, `GET /api/health` answers `503`. |
+| No database URL at build time | The build succeeds. | No migration is applied by the build: run `npx nuxt db migrate` with `DATABASE_URL` set, and set `NUXT_DATABASE_URL` when the server starts. `GET /api/health` answers `503` without a database at runtime, and until `npx nuxt db migrate` has run the API key upgrade query after the migrations. |
 | No `NUXT_STRIPE_SECRET_KEY` | The server starts and email/password sign-in works. | The better-auth Stripe plugin is not registered. Billing routes under `/api/stripe/` that call Stripe answer `503 Billing is not configured`. |
 | No `NUXT_RESEND_API_KEY` | The server starts; email/password sign-in works for verified accounts, such as the one `create-admin.ts` creates. | No email is sent. A new email/password account cannot be verified, so its sign-in is refused (`requireEmailVerification`); under `pnpm dev` the verification link is printed to the server log instead. A password reset request still answers success, but no email leaves and the failure is only logged. Account deletion and organization invitation emails are not sent. |
 

@@ -8,7 +8,7 @@ import { sql } from 'drizzle-orm'
 const ROLE_NAME = /^[a-z]+$/
 
 /**
- * SQL counterpart of `hasRole(column, [role])`: true when `role` is one of the
+ * SQL counterpart of `hasOrgRole(column, [role])`: true when `role` is one of the
  * entries of the comma-separated role list stored in `column` (better-auth stores
  * `owner,admin`; spaces are stripped for rows written by hand or older versions).
  *

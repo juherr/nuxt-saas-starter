@@ -9,7 +9,9 @@ const statement = {
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
   billing: ['manage', 'view'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  // Organization-owned API keys (@better-auth/api-key, references: 'organization')
+  apiKey: ['create', 'read', 'update', 'delete']
 } as const
 
 export const ac = createAccessControl(statement)
@@ -24,7 +26,8 @@ export const admin = ac.newRole({
   organization: ['update', 'view', 'leave'],
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  apiKey: ['create', 'read', 'update', 'delete']
 })
 
 export const owner = ac.newRole({
@@ -32,13 +35,42 @@ export const owner = ac.newRole({
   member: ['create', 'update', 'delete', 'view'],
   invitation: ['create', 'cancel', 'resend'],
   billing: ['manage', 'view'],
-  settings: ['view', 'update']
+  settings: ['view', 'update'],
+  apiKey: ['create', 'read', 'update', 'delete']
 })
 
 // ============================================
 // ROLE DEFINITIONS
 // ============================================
 export type OrgRole = 'owner' | 'admin' | 'member'
+
+/**
+ * Global user roles (`user.role`) of better-auth's admin plugin, used with
+ * its defaults in `server/utils/auth.ts` (`defaultRole: 'user'`,
+ * `adminRoles: ['admin']`).
+ */
+export type SystemRole = 'user' | 'admin'
+
+/** The organization roles of `ac`, as handed to the organization plugin. */
+export const orgRoles = { owner, admin, member } satisfies Record<OrgRole, unknown>
+
+/** A permission request on the `ac` statement, such as `{ apiKey: ['read'] }`. */
+export type OrgPermissionRequest = Parameters<typeof owner.authorize>[0]
+
+function isOrgRole(name: string): name is OrgRole {
+  return Object.hasOwn(orgRoles, name)
+}
+
+/**
+ * Whether a member's stored role, a single role or a comma-separated role
+ * list, is granted `request` by `ac`. As in better-auth's organization
+ * plugin (`hasPermissionFn`), one role of the list must grant the whole
+ * request on its own; grants are not added up across roles. A role name
+ * absent from `ac`, another casing (`Admin`) included, grants nothing.
+ */
+export function orgRolesGrant(role: string | null | undefined, request: OrgPermissionRequest): boolean {
+  return parseRoles(role).some(name => isOrgRole(name) && orgRoles[name].authorize(request).success)
+}
 
 // ============================================
 // SUBSCRIPTION PLANS & LIMITS
@@ -170,24 +202,34 @@ export function parseRoles(role: string | null | undefined): string[] {
   return role.split(',').map(entry => entry.trim()).filter(entry => entry !== '')
 }
 
+/** Whether one entry of the stored role (see `parseRoles`) is in `wanted`. */
+function holdsOneOf(role: string | null | undefined, wanted: readonly string[]): boolean {
+  return parseRoles(role).some(entry => wanted.includes(entry))
+}
+
 /**
- * Whether a stored role, a single role or a comma-separated role list,
- * holds `wanted`, or at least one entry of `wanted` when it is a list.
- * Casing must match, so `Admin` is not `admin`.
+ * Whether an organization member's stored role, a single role or a role
+ * list such as `owner,admin`, holds at least one of `roles`. Casing must
+ * match, so `Owner` is not `owner`.
  */
-export function hasRole(role: string | null | undefined, wanted: string | readonly string[]): boolean {
-  const roles = parseRoles(role)
-  if (typeof wanted === 'string')
-    return roles.includes(wanted)
-  return roles.some(entry => wanted.includes(entry))
+export function hasOrgRole(role: string | null | undefined, roles: readonly OrgRole[]): boolean {
+  return holdsOneOf(role, roles)
 }
 
 /**
  * Whether a user's global role (`user.role`, not an organization member
- * role) makes them a system administrator.
+ * role), a single role or a role list such as `user,admin`, holds at least
+ * one of `roles`. Casing must match, so `Admin` is not `admin`.
+ */
+export function hasSystemRole(role: string | null | undefined, roles: readonly SystemRole[]): boolean {
+  return holdsOneOf(role, roles)
+}
+
+/**
+ * Whether a user's global role makes them a system administrator.
  */
 export function isSystemAdmin(role: string | null | undefined): boolean {
-  return hasRole(role, 'admin')
+  return hasSystemRole(role, ['admin'])
 }
 
 /**
@@ -197,7 +239,7 @@ export function hasPermission(
   userRole: string | null | undefined,
   permission: keyof typeof PERMISSIONS
 ): boolean {
-  return hasRole(userRole, PERMISSIONS[permission])
+  return hasOrgRole(userRole, PERMISSIONS[permission])
 }
 
 /**
@@ -232,14 +274,14 @@ export function canDeleteOrganization(role: string | null | undefined): boolean 
  * Check if user is owner
  */
 export function isOwner(role: string | null | undefined): boolean {
-  return hasRole(role, ['owner'])
+  return hasOrgRole(role, ['owner'])
 }
 
 /**
  * Check if user is admin or owner
  */
 export function isAdminOrOwner(role: string | null | undefined): boolean {
-  return hasRole(role, ['owner', 'admin'])
+  return hasOrgRole(role, ['owner', 'admin'])
 }
 
 /**

@@ -7,7 +7,7 @@ const db = vi.hoisted(() => {
   const where = vi.fn(async (_condition: unknown) => [])
   const selectWhere = vi.fn(async (_condition: unknown): Promise<({ id: string } | { image: string | null })[]> => [])
   const from = vi.fn(() => ({ where: selectWhere }))
-  return { where, selectWhere, from, delete: vi.fn(() => ({ where })), select: vi.fn(() => ({ from })) }
+  return { where, selectWhere, from, delete: vi.fn((_table: unknown) => ({ where })), select: vi.fn(() => ({ from })) }
 })
 const fileService = vi.hoisted(() => ({ deleteFile: vi.fn(async (_id: string, _actor?: string) => true) }))
 const createFileService = vi.hoisted(() => vi.fn(async () => fileService))
@@ -77,6 +77,20 @@ describe('the before hook', () => {
   })
 })
 
+describe('the API key plugin endpoints the app does not use', () => {
+  const unused = ['/api-key/get', '/api-key/list', '/api-key/update', '/api-key/delete']
+
+  it('are disabled, while creation and server-side verification stay available', () => {
+    expect(options.disabledPaths).toEqual(expect.arrayContaining(unused))
+    expect(options.disabledPaths).not.toContain('/api-key/create')
+    expect(options.disabledPaths).not.toContain('/api-key/verify')
+  })
+
+  it.each(unused)('refuses %s by its resolved path', async (path) => {
+    await expect(options.hooks.before({ path })).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
 describe('the invitation email', () => {
   it('links to the accept-invite page', async () => {
     getResendClient.mockReturnValueOnce(resend)
@@ -118,6 +132,16 @@ describe('the organization create hook', () => {
     const result = await organizationHooks().beforeCreateOrganization({ organization, user })
 
     expect(result).toBeUndefined()
+  })
+})
+
+describe('the organization delete hook', () => {
+  // The foreign key api_key.reference_id -> organization.id (ON DELETE
+  // CASCADE, server/db/queries) deletes the keys with their organization.
+  it('leaves the organization\'s API keys to the database foreign key', () => {
+    const organizationPlugin = options.plugins.find((plugin: any) => plugin.id === 'organization')
+
+    expect(organizationPlugin.options.organizationHooks.beforeDeleteOrganization).toBeUndefined()
   })
 })
 
@@ -212,14 +236,13 @@ describe('the user delete hook', () => {
     expect(createFileService).not.toHaveBeenCalled()
   })
 
-  // api_key.reference_id has no foreign key to user since better-auth 1.5,
-  // so nothing in the database removes the keys of a deleted user.
-  it('deletes the API keys the deleted user owns', async () => {
-    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' })
+  // API keys belong to organizations (reference_id is an organization id),
+  // so deleting a user deletes none: a user id there would only match a
+  // key created before organization ownership, which no route lists.
+  it('deletes no API key with the user', async () => {
+    const result = await options.databaseHooks.user.delete?.before?.({ id: 'user-1' }, null)
 
-    expect(db.delete).toHaveBeenCalledWith(schema.apiKey)
-    expect(db.where).toHaveBeenCalledTimes(1)
-    expect(renderSql(db.where.mock.calls[0]?.[0])).toMatchObject({ sql: '"api_key"."reference_id" = $1', params: ['user-1'] })
+    expect(db.delete).not.toHaveBeenCalled()
     // better-auth cancels the deletion when a before hook returns false.
     expect(result).not.toBe(false)
   })

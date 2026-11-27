@@ -22,7 +22,6 @@
     "auth:schema": "pnpm exec auth generate --config server/utils/auth.ts --output server/db/schema/auth.ts --yes",
     "db:generate": "drizzle-kit generate --config ./server/db/drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config ./server/db/drizzle.config.ts",
-    "db:backfill-api-keys": "node scripts/backfill-api-key-organization.ts",
     "demo:seed": "node scripts/demo/seed.ts",
     "demo:reset": "node scripts/demo/reset.ts",
     "build": "nuxt build",

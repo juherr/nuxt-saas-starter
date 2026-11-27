@@ -63,9 +63,7 @@ async function createApiKey() {
     const { data, error } = await client.apiKey.create({
       name: newKeyName.value,
       expiresIn: newKeyExpiresInDays.value ? newKeyExpiresInDays.value * 24 * 60 * 60 : undefined,
-      metadata: {
-        organizationId: activeOrg.value.data.id
-      }
+      organizationId: activeOrg.value.data.id
     })
     if (error)
       throw error

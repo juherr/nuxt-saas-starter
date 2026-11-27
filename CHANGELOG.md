@@ -38,6 +38,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** API keys are owned by their organization through better-auth's API key plugin
+  (`api_key.reference_id` holds the organization id), and the backfill script is removed. The
+  build, `npx nuxt db migrate` and `pnpm dev` move the keys linked in `api_key_organization` to
+  their organization, with no SQL to run by hand, and delete the disabled keys that belong to no
+  organization. The upgrade needs a short maintenance window: back up the database and stop every
+  instance of the previous release first, since it can no longer create a key afterwards, does not
+  see or revoke the new keys, and rolling the app back does not restore its behaviour. The upgrade
+  refuses, changing nothing, while an enabled key that is not linked belongs to no organization:
+  such a key was already unlisted and could not be revoked. Its message prints the SQL that lists
+  exactly those keys: delete them or move them to their organization as
+  [Upgrading to organization-owned API keys](README.md#upgrading-to-organization-owned-api-keys)
+  explains, then build again. `GET /api/health` answers 503 until the upgrade has run, which a
+  Cloudflare build without `DATABASE_URL` does not do: run `npx nuxt db migrate` there. On the
+  better-auth 1.4 schema, the generated migration still needs editing by hand: add the copy of
+  `apiKey` into `api_key`, and delete the generated `DROP CONSTRAINT` on `api_key_organization`
+  ([Upgrading from better-auth 1.4](README.md#upgrading-from-better-auth-14)).
+  `api_key_organization` stays, deprecated, until
+  [#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it, so upgrade every
+  deployment through this release. Deleting an organization deletes its keys through a database
+  foreign key, and a key now survives the user who created it. Clients create a key with a
+  top-level `organizationId` instead of `metadata.organizationId`
+  ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145))
 - `pnpm typecheck` is a blocking CI check and must stay at zero errors
   ([#98](https://github.com/juherr/nuxt-saas-starter/pull/98))
 - Rename the package to `nuxt-saas-starter`, declare it MIT in `package.json`, restore the NuxSaaS
@@ -155,7 +177,9 @@ as of 2025-12-14, itself built on NuxSaaS. Changes made before the fork are not 
 ### Added
 
 - `GET /api/health` for load balancers: it answers 503 when the database is not configured or does
-  not answer within 2 seconds ([#16](https://github.com/juherr/nuxt-saas-starter/pull/16))
+  not answer within 2 seconds ([#16](https://github.com/juherr/nuxt-saas-starter/pull/16)), and
+  while the API key upgrade query has not run
+  ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145))
 - Access log with one line per request, a request id echoed in `x-request-id`, and the
   `NUXT_LOG_LEVEL` and `NUXT_LOG_FORMAT` (text or JSON) settings
   ([#28](https://github.com/juherr/nuxt-saas-starter/pull/28))

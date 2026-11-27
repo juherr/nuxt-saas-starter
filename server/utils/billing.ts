@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 import type { H3Event } from 'h3'
 import type Stripe from 'stripe'
-import type { OrgRole } from '~~/shared/utils/permissions'
+import type { OrgPermissionRequest, OrgRole } from '~~/shared/utils/permissions'
 import { and, eq, inArray } from 'drizzle-orm'
 import { member as memberTable, organization as organizationTable, subscription as subscriptionTable } from '~~/server/db/schema'
 import { getAuthSession } from '~~/server/utils/auth'
 import { useDB } from '~~/server/utils/db'
 import { createStripeClient } from '~~/server/utils/stripe'
-import { hasRole } from '~~/shared/utils/permissions'
+import { hasOrgRole, orgRolesGrant } from '~~/shared/utils/permissions'
 
 type Database = Awaited<ReturnType<typeof useDB>>
 
@@ -48,17 +48,14 @@ export async function requireAuthSession(event: H3Event): Promise<AuthSession> {
 }
 
 /**
- * Requires a signed-in user who is a member of the organization and, when
- * `roles` is given, whose stored role, a single role or a role list such
- * as `owner,admin`, holds at least one of them. Casing must still match.
- * Without `roles`, any membership passes, whatever its role value.
- * Anonymous callers get 401. A non-member and a member with another role
- * get the same 403, so the answer does not reveal membership.
+ * Requires a signed-in member of the organization whose stored role passes
+ * `allows`. Anonymous callers get 401. A non-member and a member refused by
+ * `allows` get the same 403, so the answer does not reveal membership.
  */
-export async function requireOrganizationRole(
+async function requireOrganizationMember(
   event: H3Event,
   organizationId: string,
-  roles?: readonly OrgRole[]
+  allows: (role: string) => boolean
 ) {
   const session = await requireAuthSession(event)
 
@@ -70,11 +67,42 @@ export async function requireOrganizationRole(
     )
   })
 
-  if (!member || (roles && !hasRole(member.role, roles))) {
+  if (!member || !allows(member.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   }
 
   return { session, member }
+}
+
+/**
+ * Requires a signed-in user who is a member of the organization and, when
+ * `roles` is given, whose stored role, a single role or a role list such
+ * as `owner,admin`, holds at least one of them. Casing must still match.
+ * Without `roles`, any membership passes, whatever its role value.
+ * Anonymous callers get 401. A non-member and a member with another role
+ * get the same 403, so the answer does not reveal membership.
+ */
+export function requireOrganizationRole(
+  event: H3Event,
+  organizationId: string,
+  roles?: readonly OrgRole[]
+) {
+  return requireOrganizationMember(event, organizationId, role => !roles || hasOrgRole(role, roles))
+}
+
+/**
+ * Requires a signed-in member of the organization whose stored role is
+ * granted `request` by the organization access control (`ac`), the model
+ * better-auth's own organization and API key endpoints check: see
+ * `orgRolesGrant`. Anonymous callers get 401; a non-member and a member
+ * without the permission get the same 403.
+ */
+export function requireOrganizationPermission(
+  event: H3Event,
+  organizationId: string,
+  request: OrgPermissionRequest
+) {
+  return requireOrganizationMember(event, organizationId, role => orgRolesGrant(role, request))
 }
 
 const subscriptionNotFound = () =>

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 import { eq } from 'drizzle-orm'
-import { apiKey, apiKeyOrganization } from '~~/server/db/schema'
-import { requireApiKeyManager } from '~~/server/utils/apiKeyAccess'
-import { requireAuthSession } from '~~/server/utils/billing'
+import { apiKey } from '~~/server/db/schema'
+import { requireAuthSession, requireOrganizationPermission } from '~~/server/utils/billing'
 import { useDB } from '~~/server/utils/db'
 
 const keyNotFound = () => createError({ statusCode: 404, statusMessage: 'API key not found' })
 
 /**
- * Revokes a key of an organization the caller manages. An unknown key, a
- * key without organization link, another organization's key and a caller
- * who does not manage the key's organization all get the same 404, checked
- * before anything is deleted.
+ * Revokes a key of an organization the caller manages. The key's
+ * organization is its reference_id. An unknown key, another
+ * organization's key and a key whose reference_id is not an organization
+ * the caller manages (such as a key referencing a user) all get the same
+ * 404, checked before anything is deleted.
  */
 export default defineEventHandler(async (event) => {
   await requireAuthSession(event)
@@ -22,15 +22,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = await useDB()
-  const link = await db.query.apiKeyOrganization.findFirst({
-    where: eq(apiKeyOrganization.apiKeyId, keyId)
+  const key = await db.query.apiKey.findFirst({
+    columns: { id: true, referenceId: true },
+    where: eq(apiKey.id, keyId)
   })
-  if (!link) {
+  if (!key) {
     throw keyNotFound()
   }
 
   try {
-    await requireApiKeyManager(event, link.organizationId)
+    await requireOrganizationPermission(event, key.referenceId, { apiKey: ['delete'] })
   } catch (error) {
     if ((error as { statusCode?: number }).statusCode === 403) {
       throw keyNotFound()

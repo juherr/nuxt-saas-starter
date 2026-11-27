@@ -13,10 +13,9 @@ import * as schema from '~~/server/db/schema'
 import { createFileService } from '~~/server/services/file/fileService'
 import { DEMO_MODE_RESTRICTED, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
 import { buildInvitationUrl } from '~~/shared/utils/invitationUrl'
-import { ac, admin, member, owner } from '~~/shared/utils/permissions'
+import { ac, orgRoles } from '~~/shared/utils/permissions'
 import { userDisplayName } from '~~/shared/utils/userDisplayName'
-import { createdApiKeyId, isApiKeyManagerRole, parseRequestedOrganizationId } from './apiKeyMetadata'
-import { deleteOrganizationApiKeys } from './apiKeyOrganization'
+import { apiKeyPluginOptions } from './apiKeyOptions'
 import { logAuditEvent } from './auditLogger'
 import { AUDITED_SUCCESS_PATHS, resolveAuditTarget } from './authAudit'
 import { organizationAdditionalFields } from './authSchemaFields'
@@ -139,8 +138,10 @@ async function deleteReplacedAvatar(updated: { id: string, image?: string | null
  * plugin's own endpoints for the same actions do not, so they are off.
  * Organization API keys are listed and revoked through
  * /api/organization/api-keys, which check the caller's role in the key's
- * organization; the API key plugin's get, list, update and delete
- * endpoints only check that the caller created the key, so they are off.
+ * organization and answer display fields only. The API key plugin's get,
+ * list, update and delete endpoints are not used, so they stay off: the
+ * app serves one path per action on a key, and creation (permission-checked
+ * by the plugin in the key's organization) is the only native one.
  * Paths are relative to the /api/auth base path.
  */
 export const DISABLED_AUTH_PATHS: readonly string[] = [
@@ -237,59 +238,6 @@ async function refuseForeignSubscriptionUpgrade(ctx: AuthMiddlewareContext, refe
   })
   if (!isSubscriptionOwnedByReference(rows, referenceId)) {
     throw new APIError('NOT_FOUND')
-  }
-}
-
-/**
- * An API key belongs to the organization its metadata names, so only an
- * owner or admin of that organization may create it. Runs before the
- * endpoint validates its body. Anonymous callers get 401; a missing
- * organization, an id with surrounding whitespace (the key would store
- * it as sent), a non-member and a member with another role all get the
- * same 403. Server-side calls without a session are refused as well.
- */
-async function requireApiKeyCreationRights(ctx: AuthMiddlewareContext) {
-  const session = await getSessionFromCtx(ctx)
-  if (!session) {
-    throw new APIError('UNAUTHORIZED')
-  }
-  const forbidden = () => new APIError('FORBIDDEN', { message: 'You cannot create API keys for this organization' })
-  const organizationId = parseRequestedOrganizationId(ctx.body?.metadata)
-  if (!organizationId) {
-    throw forbidden()
-  }
-  const membership = await ctx.context.adapter.findOne<{ role: string }>({
-    model: 'member',
-    where: [
-      { field: 'organizationId', value: organizationId },
-      { field: 'userId', value: session.user.id }
-    ]
-  })
-  if (!isApiKeyManagerRole(membership?.role)) {
-    throw forbidden()
-  }
-}
-
-/**
- * Records the organization of a key the endpoint just created. The
- * creation and this insert are not one transaction. When the insert
- * fails, the answer becomes an error so the plaintext key never reaches
- * the client: the key row stays unlisted and no one holds its plaintext, which
- * fails closed. `returned` carries the plaintext key: read its id only,
- * and never log or serialize it.
- */
-async function linkCreatedApiKey(ctx: AuthMiddlewareContext) {
-  const apiKeyId = createdApiKeyId(ctx.context.returned)
-  const organizationId = parseRequestedOrganizationId(ctx.body?.metadata)
-  if (!apiKeyId || !organizationId) {
-    return
-  }
-  try {
-    await getDB().insert(schema.apiKeyOrganization).values({ apiKeyId, organizationId })
-  } catch (error) {
-    // The insert holds ids only, so its error cannot carry the plaintext.
-    console.error(`Failed to link API key ${apiKeyId} to its organization:`, error)
-    throw new APIError('INTERNAL_SERVER_ERROR', { message: 'The API key could not be created' })
   }
 }
 
@@ -452,23 +400,12 @@ export const createBetterAuth = () => betterAuth({
         }
       },
       delete: {
-        // api_key.reference_id has no foreign key to user (@better-auth/api-key
-        // schema), so the keys of a deleted user would otherwise stay listed.
-        // Every key here references a user: the plugin keeps the default
-        // `references: 'user'`. internalAdapter.deleteUser runs outside a
-        // transaction: a throwing before hook stops it before the user row
-        // and the cached sessions are deleted, where a throwing after hook
-        // would leave the user deleted and its cached sessions alive
-        // (db/with-hooks.mjs, db/internal-adapter.mjs). Returning false
-        // would cancel the deletion, so return nothing.
-        before: async (user) => {
-          await getDB()
-            .delete(schema.apiKey)
-            .where(eq(schema.apiKey.referenceId, user.id))
-        },
         // Stored objects cannot be restored, so they go only once the user
         // row is gone: a failed or cancelled deletion keeps them. This hook
-        // never throws (see above). The signed-in user (the account owner,
+        // never throws: internalAdapter.deleteUser runs outside a
+        // transaction, so a throwing after hook would leave the user deleted
+        // and its cached sessions alive (db/with-hooks.mjs,
+        // db/internal-adapter.mjs). The signed-in user (the account owner,
         // or an admin) is the actor.
         after: async (user, context) => {
           try {
@@ -659,9 +596,6 @@ export const createBetterAuth = () => betterAuth({
         await refuseForeignSubscriptionUpgrade(ctx, resolveUpgradeReferenceId(ctx, session))
         return checkoutSeatsOverride(ctx, session)
       }
-      if (ctx.path === '/api-key/create') {
-        await requireApiKeyCreationRights(ctx)
-      }
       return undefined
     }),
     after: createAuthMiddleware(async (ctx) => {
@@ -724,9 +658,6 @@ export const createBetterAuth = () => betterAuth({
           })
         }
       }
-      if (ctx.path === '/api-key/create') {
-        await linkCreatedApiKey(ctx)
-      }
     })
   },
   plugins: [
@@ -734,11 +665,7 @@ export const createBetterAuth = () => betterAuth({
     adminPlugin(),
     organization({
       ac,
-      roles: {
-        owner,
-        admin,
-        member
-      },
+      roles: orgRoles,
       enableMetadata: true,
       organizationHooks: {
         // The plugin hands over the creator as read from the session, which
@@ -748,12 +675,11 @@ export const createBetterAuth = () => betterAuth({
           if (user.referralCode) {
             return { data: { ...organization, referralCode: user.referralCode } }
           }
-        },
-        // Runs before the plugin deletes the organization row, whose
-        // cascade would otherwise leave its keys enabled and unrevocable.
-        beforeDeleteOrganization: async ({ organization }) => {
-          await deleteOrganizationApiKeys(getDB(), organization.id)
         }
+        // No beforeDeleteOrganization: the foreign key api_key.reference_id
+        // -> organization.id (ON DELETE CASCADE, added by
+        // server/db/queries/api-key-organization-owner.postgresql.sql)
+        // deletes an organization's keys with it.
       },
       schema: {
         organization: {
@@ -775,14 +701,7 @@ export const createBetterAuth = () => betterAuth({
         }
       }
     }),
-    apiKey({
-      enableMetadata: true,
-      schema: {
-        apikey: {
-          modelName: 'apiKey'
-        }
-      }
-    }),
+    apiKey(apiKeyPluginOptions),
     // Billing is optional: without a Stripe secret key the app runs without it.
     // auth:schema keeps the plugin so the generated schema stays complete.
     ...(isStripeConfigured() || isAuthSchemaCommand ? [setupStripe()] : [])

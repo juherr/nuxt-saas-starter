@@ -2,9 +2,13 @@
 import { index, pgTable, text } from 'drizzle-orm/pg-core'
 import { apiKey, organization } from './auth'
 
-// Exact organization of an API key. Kept outside the generated auth.ts so
-// that `pnpm auth:schema` does not drop it: better-auth's apiKey plugin
-// cannot declare extra fields (its schema option only renames).
+// Deprecated: the organization of an API key before keys became
+// organization-owned (api_key.reference_id). The application no longer reads
+// or writes it; only the upgrade query
+// server/db/queries/api-key-organization-owner.postgresql.sql reads it, to
+// move each linked key to its organization. It stays declared so that
+// `pnpm db:generate` emits no DROP TABLE before that query has run on every
+// deployment. Removed by #162 (contract phase).
 export const apiKeyOrganization = pgTable(
   'api_key_organization',
   {

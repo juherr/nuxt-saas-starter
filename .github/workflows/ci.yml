@@ -192,6 +192,24 @@ jobs:
         run: pnpm db:generate
       - name: Build (applies the migrations through NuxtHub)
         run: pnpm build
+      # The foreign key that deletes an organization's API keys exists only
+      # once NuxtHub applies server/db/queries after the migrations: nothing
+      # else fails if that registration is lost.
+      - name: Check the API key organization foreign key (build)
+        run: |
+          node --input-type=module <<'EOF'
+          import pg from 'pg'
+          const client = new pg.Client(process.env.DATABASE_URL)
+          await client.connect()
+          const { rows } = await client.query(
+            "SELECT confdeltype FROM pg_constraint WHERE conname = 'api_key_reference_id_organization_id_fk'"
+          )
+          await client.end()
+          if (rows[0]?.confdeltype !== 'c') {
+            console.error('::error::api_key_reference_id_organization_id_fk is missing or not ON DELETE CASCADE')
+            process.exit(1)
+          }
+          EOF
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
       - name: Wait for /api/health
@@ -200,6 +218,21 @@ jobs:
         env:
           DEMO_RESET_CONFIRM: localhost
         run: pnpm demo:reset
+      - name: Check the API key organization foreign key (nuxt db migrate)
+        run: |
+          node --input-type=module <<'EOF'
+          import pg from 'pg'
+          const client = new pg.Client(process.env.DATABASE_URL)
+          await client.connect()
+          const { rows } = await client.query(
+            "SELECT confdeltype FROM pg_constraint WHERE conname = 'api_key_reference_id_organization_id_fk'"
+          )
+          await client.end()
+          if (rows[0]?.confdeltype !== 'c') {
+            console.error('::error::api_key_reference_id_organization_id_fk is missing or not ON DELETE CASCADE')
+            process.exit(1)
+          }
+          EOF
       - name: Seed a user
         run: node create-admin.ts
       - name: Sign in with email and password

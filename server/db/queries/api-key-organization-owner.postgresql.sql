@@ -3,9 +3,13 @@
 -- Moves API keys to organization ownership, then lets the database keep it.
 -- Registered in nuxt.config.ts (hub:db:queries:paths): NuxtHub runs it after
 -- every migration, on each build with a database URL, `nuxt db migrate` and
--- `pnpm dev`. It is idempotent: once the foreign key exists, it is a no-op.
+-- `pnpm dev`. It is idempotent: once the foreign key exists, it returns
+-- before taking any lock (an instance of a previous release can no longer
+-- create a key then, so no link is left to move).
 --
--- 1. Lock api_key against writes from a still-running previous release.
+-- 1. Lock api_key against writes from a still-running previous release,
+--    waiting at most 5 s (lock_timeout) so a long transaction fails the
+--    deploy with SQLSTATE 55P03 instead of holding it.
 -- 2. Give each key listed in the deprecated link table api_key_organization
 --    its organization as reference_id.
 -- 3. Delete the keys that still reference no organization and are disabled
@@ -29,6 +33,16 @@ DECLARE
   -- itself, and the disabled ones, which the upgrade deletes.
   blocking constant text := $q$SELECT k.id, k.reference_id FROM api_key k WHERE k.enabled IS DISTINCT FROM false AND NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = k.reference_id) AND NOT EXISTS (SELECT 1 FROM api_key_organization l WHERE l.api_key_id = k.id)$q$;
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = $name$api_key_reference_id_organization_id_fk$name$
+      AND conrelid = to_regclass($table$api_key$table$)
+  ) THEN
+    RETURN;
+  END IF;
+
+  -- Local to the transaction of this statement: the session keeps its own.
+  PERFORM set_config($k$lock_timeout$k$, $v$5s$v$, true);
   LOCK TABLE api_key IN SHARE ROW EXCLUSIVE MODE;
 
   UPDATE api_key

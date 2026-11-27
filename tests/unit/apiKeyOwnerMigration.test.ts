@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import type pg from 'pg'
 import type { TestDatabase } from './support/postgres'
 import { fileURLToPath } from 'node:url'
+import pg from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { apiKeyOwnerQueryPath, readSqlFile } from './support/nuxthubSql'
 import { applySqlLikeNuxtHub, appSchemaStatements, createTestDatabase, describeWithPostgres } from './support/postgres'
@@ -194,6 +194,62 @@ describeWithPostgres('the API key owner upgrade query', () => {
       await expect(insertKey('api_key', 'reference_id', 'key-1', 'org-missing'))
         .rejects
         .toMatchObject({ code: '23503', constraint: FK_NAME })
+    })
+  })
+
+  describe('while another connection holds a lock on api_key', () => {
+    // A long transaction of a running instance, or an operator session.
+    const withLockHeld = async (run: () => Promise<void>) => {
+      const other = new pg.Client({ connectionString: database.url })
+      await other.connect()
+      try {
+        await other.query('BEGIN')
+        await other.query('LOCK TABLE api_key IN ACCESS EXCLUSIVE MODE')
+        await run()
+      }
+      finally {
+        await other.query('ROLLBACK').catch(() => {})
+        await other.end()
+      }
+    }
+
+    const lockTimeout = async () => (await client.query('SHOW lock_timeout')).rows[0]?.lock_timeout
+
+    beforeEach(async () => {
+      await createCurrentSchema()
+    })
+
+    it('does not wait for the lock once the foreign key exists', async () => {
+      await runUpgrade()
+
+      await withLockHeld(async () => {
+        const settled = await Promise.race([
+          runUpgrade().then(() => 'completed'),
+          new Promise(resolve => setTimeout(resolve, 1000, 'waiting'))
+        ])
+
+        expect(settled).toBe('completed')
+      })
+    })
+
+    it('gives up on the lock after its lock_timeout instead of waiting', { timeout: 20_000 }, async () => {
+      await withLockHeld(async () => {
+        const settled = await Promise.race([
+          runUpgrade().then(() => 'completed', (error: unknown) => error),
+          new Promise(resolve => setTimeout(resolve, 9000, 'still waiting'))
+        ])
+
+        expect(settled).toMatchObject({ code: '55P03' })
+      })
+      expect(await ownerForeignKey()).toEqual([])
+      expect(await lockTimeout()).toBe('0')
+    })
+
+    it('leaves the lock_timeout of the session unchanged', async () => {
+      await runUpgrade()
+
+      expect(await ownerForeignKey()).toHaveLength(1)
+      expect(await lockTimeout()).toBe('0')
     })
   })
 

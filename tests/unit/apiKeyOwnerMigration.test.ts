@@ -3,7 +3,7 @@ import type { TestDatabase } from './support/postgres'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { apiKeyOwnerQueryPath, readSqlFile } from './support/nuxthubSql'
+import { apiKeyOwnerQueryPath, readSqlFile, splitLikeNuxtHub } from './support/nuxthubSql'
 import { applySqlLikeNuxtHub, appSchemaStatements, createTestDatabase, describeWithPostgres } from './support/postgres'
 
 // The upgrade query against a real Postgres: a database of this release
@@ -261,21 +261,52 @@ describeWithPostgres('the API key owner upgrade query', () => {
     expect(await ownerForeignKey()).toEqual([{ confdeltype: 'c' }])
   })
 
+  // The real drizzle-kit output (fixtures/drizzle-kit-*.sql), edited as the
+  // README (Upgrading from better-auth 1.4) tells the operator to.
   describe('on a better-auth 1.4 database migrated as the README says', () => {
+    // README step 1, before the line it names.
+    const copyKeys = `INSERT INTO "api_key" ("id", "name", "start", "reference_id", "prefix", "key", "refill_interval", "refill_amount", "last_refill_at", "enabled", "rate_limit_enabled", "rate_limit_time_window", "rate_limit_max", "request_count", "remaining", "last_request", "expires_at", "created_at", "updated_at", "permissions", "metadata")
+SELECT "id", "name", "start", "user_id", "prefix", "key", "refill_interval", "refill_amount", "last_refill_at", "enabled", "rate_limit_enabled", "rate_limit_time_window", "rate_limit_max", "request_count", "remaining", "last_request", "expires_at", "created_at", "updated_at", "permissions", "metadata" FROM "apiKey";--> statement-breakpoint
+`
+    // README step 2, before the line it names.
+    const fillStatus = `UPDATE "subscription" SET "status" = 'incomplete' WHERE "status" IS NULL;--> statement-breakpoint
+`
+    // README step 3: DROP TABLE "apiKey" CASCADE already dropped it.
+    const redundantDropConstraint = 'ALTER TABLE "api_key_organization" DROP CONSTRAINT "api_key_organization_api_key_id_apiKey_id_fk";\n'
+
+    const once = (sql: string, line: string) => {
+      expect(sql.split(line)).toHaveLength(2)
+      return sql.indexOf(line)
+    }
+    const insertBefore = (sql: string, line: string, text: string) => {
+      const at = once(sql, line)
+      return sql.slice(0, at) + text + sql.slice(at)
+    }
+    const remove = (sql: string, line: string) => {
+      once(sql, line)
+      return sql.replace(line, '')
+    }
+
+    const generated = () => fixture('drizzle-kit-better-auth-1.4-to-1.7-migration.sql')
+    // Steps 1 and 2 only: what applies to every 1.4 deployment.
+    const withDataSteps = (sql: string) => insertBefore(
+      insertBefore(sql, 'ALTER TABLE "apiKey" DISABLE ROW LEVEL SECURITY;', copyKeys),
+      'ALTER TABLE "subscription" ALTER COLUMN "status" SET NOT NULL;',
+      fillStatus
+    )
+
     beforeEach(async () => {
-      await applySqlLikeNuxtHub(client, fixture('better-auth-1.4-api-keys.sql'))
+      await applySqlLikeNuxtHub(client, fixture('drizzle-kit-better-auth-1.4-schema.sql'))
       await insertUser('user-1')
       await insertOrganization('org-1')
     })
 
     it('ends with the linked keys owned by their organization', async () => {
-      await applySqlLikeNuxtHub(client, fixture('better-auth-1.4-api-key-organization.sql'))
       // A 1.4 key created before 1.7 defaults: enabled is NULL.
       await insertKey('"apiKey"', 'user_id', 'key-1', 'user-1', null)
       await insertLink('key-1', 'org-1')
 
-      await applySqlLikeNuxtHub(client, fixture('better-auth-1.7-api-keys-migration.sql'))
-      await applySqlLikeNuxtHub(client, fixture('better-auth-1.7-api-key-organization-relink.sql'))
+      await applySqlLikeNuxtHub(client, remove(withDataSteps(generated()), redundantDropConstraint))
       await runUpgrade()
 
       expect(await keys()).toEqual([
@@ -284,11 +315,28 @@ describeWithPostgres('the API key owner upgrade query', () => {
       expect(await ownerForeignKey()).toHaveLength(1)
     })
 
+    it('fails on the generated DROP CONSTRAINT of the link table when it is left in', async () => {
+      await insertKey('"apiKey"', 'user_id', 'key-1', 'user-1')
+      await insertLink('key-1', 'org-1')
+
+      await expect(applySqlLikeNuxtHub(client, withDataSteps(generated())))
+        .rejects
+        .toMatchObject({ code: '42704', message: expect.stringContaining('api_key_organization_api_key_id_apiKey_id_fk') })
+    })
+
+    // drizzle-kit creates the link table instead on such a deployment: its
+    // statements come from a hand-written fixture, as the generated file
+    // above was captured from a 1.4 schema that has the table.
     it('stops without deleting enabled keys when it predates the link table', async () => {
+      await client.query('DROP TABLE api_key_organization')
       await insertKey('"apiKey"', 'user_id', 'key-1', 'user-1')
       await insertKey('"apiKey"', 'user_id', 'key-2', 'user-1', null)
 
-      await applySqlLikeNuxtHub(client, fixture('better-auth-1.7-api-keys-migration.sql'))
+      const withoutLinkTable = splitLikeNuxtHub(withDataSteps(generated()))
+        .filter(statement => !statement.includes('api_key_organization'))
+      for (const statement of withoutLinkTable) {
+        await client.query(statement)
+      }
       await applySqlLikeNuxtHub(client, fixture('better-auth-1.7-api-key-organization-create.sql'))
       const error = await upgradeError()
 

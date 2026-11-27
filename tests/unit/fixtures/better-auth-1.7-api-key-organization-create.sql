@@ -1,8 +1,11 @@
 -- SPDX-License-Identifier: MIT
 --
--- Ends better-auth-1.7-api-keys-migration.sql on a 1.4 deployment that
--- predates api_key_organization: drizzle-kit creates the link table, empty
--- (server/db/schema/apiKeyOrganization.ts, kept until #162).
+-- Hand-written: the link table statements drizzle-kit writes in the 1.4 ->
+-- 1.7 migration of a 1.4 deployment that predates api_key_organization. It
+-- creates the link table, empty (server/db/schema/apiKeyOrganization.ts,
+-- kept until #162). drizzle-kit-better-auth-1.4-to-1.7-migration.sql was
+-- generated from a 1.4 schema that has the table, so it holds a
+-- DROP CONSTRAINT and an ADD CONSTRAINT on it instead.
 CREATE TABLE "api_key_organization" (
 	"api_key_id" text PRIMARY KEY NOT NULL,
 	"organization_id" text NOT NULL

@@ -126,13 +126,23 @@ The generated migration then ends with `DROP TABLE "apiKey" CASCADE`, which lose
    UPDATE "subscription" SET "status" = 'incomplete' WHERE "status" IS NULL;--> statement-breakpoint
    ```
 
-3. If `api_key_organization` already exists, its foreign key points at `apiKey`, and
-   `DROP TABLE "apiKey" CASCADE` drops that constraint. Check that the file adds a foreign key from
-   `api_key_organization` to `api_key` after the copy of step 1: the copy keeps the key ids, so the
-   links stay valid. A deployment from before the link table gets it created, empty.
+3. If `api_key_organization` already exists (a deployment of v0.1.0 or later), delete the line:
+
+   ```sql
+   ALTER TABLE "api_key_organization" DROP CONSTRAINT "api_key_organization_api_key_id_apiKey_id_fk";
+   ```
+
+   That foreign key points at `apiKey`, and `DROP TABLE "apiKey" CASCADE` has already dropped it, so
+   the statement fails with `constraint "api_key_organization_api_key_id_apiKey_id_fk" of relation
+   "api_key_organization" does not exist` (SQLSTATE 42704) and stops the migration. The file then
+   adds a foreign key from `api_key_organization` to `api_key`: the copy of step 1 keeps the key
+   ids, so the links stay valid. A deployment from before the link table has no such line: the file
+   creates the table, empty.
 
 The copy of step 1 stays manual: the upgrade query only moves keys that are already in `api_key`.
-Then apply the migration
+Back up the database, and stop every instance of the previous release before you apply the
+migration: a key created after the copy of step 1 is dropped with `"apiKey"`. The next section's
+maintenance window covers it. Then apply the migration
 (`npx nuxt db migrate`, or `pnpm build`). After it, the query of
 [Upgrading to organization-owned API keys](#upgrading-to-organization-owned-api-keys) moves each
 linked key to its organization. With an empty link table, every copied key still references its
@@ -169,12 +179,22 @@ id. Clients create a key with a top-level `organizationId` instead of `metadata.
 key now survives the user who created it, and is deleted with its organization by the foreign key
 described below, even when the organization row is deleted directly in SQL.
 
-The upgrade is automatic: there is no SQL to run by hand and no need to stop the app. NuxtHub runs
-`server/db/queries/api-key-organization-owner.postgresql.sql` after all migrations, on every
-`pnpm build` with `DATABASE_URL` set, every `npx nuxt db migrate` and every `pnpm dev` start. It is
-a single statement, so it either applies in full or changes nothing. It:
+The upgrade runs without SQL by hand, but it needs a short maintenance window. Once it has run, an
+instance of the previous release cannot create a key (the foreign key refuses the creator's user id
+it writes as `reference_id`), does not list the keys created by the new release, and cannot revoke
+them. Rolling the app back to the previous release does not bring the old behaviour back: the keys
+stay moved and the foreign key stays. So:
 
-1. locks `api_key` against writes from the release still running;
+1. back up the database;
+2. stop every instance of the previous release;
+3. build and migrate (below);
+4. start the new release.
+
+NuxtHub runs `server/db/queries/api-key-organization-owner.postgresql.sql` after all migrations, on
+every `pnpm build` with `DATABASE_URL` set, every `npx nuxt db migrate` and every `pnpm dev` start.
+It is a single statement, so it either applies in full or changes nothing. It:
+
+1. locks `api_key` against writes, waiting at most 5 seconds for the lock;
 2. moves every key listed in `api_key_organization` to its organization (`reference_id`), with its
    key material unchanged, so clients keep using the same key;
 3. deletes the keys that belong to no organization and are disabled (`enabled = false`);
@@ -182,24 +202,37 @@ a single statement, so it either applies in full or changes nothing. It:
 5. adds the foreign key `api_key_reference_id_organization_id_fk`
    (`api_key.reference_id` → `organization.id`, `ON DELETE CASCADE`) if it is missing.
 
-Once the foreign key exists, the query has nothing left to do, so running it on every build is
-harmless. During a rolling deploy the previous release keeps serving requests; once the foreign key
-exists, its key creation fails (it writes the creator's user id as `reference_id`), so it cannot
-create a key that belongs to no organization. Nothing else in it breaks: `api_key_organization`
-is still there.
+Once the foreign key exists, the query returns at once, without taking the lock, so running it on
+every build is harmless. If another session holds a lock on `api_key` for more than 5 seconds (an
+instance of the previous release still running, an open transaction), the query gives up with
+`canceling statement due to lock timeout` (SQLSTATE 55P03) and changes nothing: stop that session
+and run it again.
+
+**The app is not ready until the query has run.** `GET /api/health` answers `503` while the foreign
+key is missing, and logs the cause on the server. Nothing else stops the app from serving without
+it, and then deleting an organization leaves its keys behind. Two setups never run the query on
+their own:
+
+- a Cloudflare build has no `DATABASE_URL`, so it applies neither the migrations nor the query: run
+  `npx nuxt db migrate` with `DATABASE_URL` set against the production database, before or right
+  after the deploy (the demo runs it in its `reset` job, before deploying,
+  [docs/DEMO_DEPLOYMENT.md](docs/DEMO_DEPLOYMENT.md));
+- `pnpm dev` only logs a failure of the query and keeps running.
 
 **When the query refuses**, the build (`pnpm build`) and `npx nuxt db migrate` stop with a non-zero
-exit code and a message that gives the number of keys concerned; `pnpm dev` only logs the error and
-keeps running. Those keys were never linked to an organization, so no one could already list or
-revoke them before this release. List them with the query from the message:
+exit code, and `pnpm dev` only logs the error and keeps running. The refusal rolls the whole upgrade
+back: no key has moved, no disabled key is deleted, and the foreign key is not added. The message
+gives the number of keys that block it and the SQL that lists exactly them, the enabled keys that
+belong to no organization and are not linked in `api_key_organization`:
 
 ```sql
-SELECT id, reference_id FROM api_key
-WHERE NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = api_key.reference_id);
+SELECT k.id, k.reference_id FROM api_key k WHERE k.enabled IS DISTINCT FROM false AND NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = k.reference_id) AND NOT EXISTS (SELECT 1 FROM api_key_organization l WHERE l.api_key_id = k.id)
 ```
 
-Then, for each key, either delete it (an owner or admin of the organization recreates it if it is
-still needed):
+Those keys were never linked to an organization, so no one could already list or revoke them before
+this release. The linked keys and the disabled ones are not listed: the query moves the first and
+deletes the second. For each listed key, either delete it (an owner or admin of the organization
+recreates it if it is still needed):
 
 ```sql
 DELETE FROM "api_key" WHERE "id" = '<key id>';

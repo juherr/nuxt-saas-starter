@@ -248,13 +248,23 @@ linked key to its organization, deletes the disabled keys that belong to no orga
 the foreign key `api_key.reference_id` → `organization.id` (`ON DELETE CASCADE`). It refuses, and
 changes nothing, while an enabled key belongs to no organization.
 
-- [ ] Follow [Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys).
-  The app can keep running during the deploy: no SQL to run by hand. When upgrading from the
-  better-auth 1.4 schema in one go, edit the generated migration as
-  [Upgrading from better-auth 1.4](../README.md#upgrading-from-better-auth-14) explains.
-- [ ] If the build or `npx nuxt db migrate` stops on that query, list the keys with the SQL in its
-  message, delete them or move each one to its organization, then run it again (README section
-  above).
+- [ ] Plan a short maintenance window
+  ([Upgrading to organization-owned API keys](../README.md#upgrading-to-organization-owned-api-keys)):
+  back up the database, stop every instance of the previous release, build and migrate, then start
+  the new release. Once the query has run, the previous release cannot create a key, does not see
+  or revoke the keys of the new release, and rolling back the app does not restore its behaviour.
+- [ ] When upgrading from the better-auth 1.4 schema in one go, edit the generated migration as
+  [Upgrading from better-auth 1.4](../README.md#upgrading-from-better-auth-14) explains, including
+  deleting `ALTER TABLE "api_key_organization" DROP CONSTRAINT "api_key_organization_api_key_id_apiKey_id_fk";`
+  when the link table exists: `DROP TABLE "apiKey" CASCADE` has already dropped that constraint.
+- [ ] If the build or `npx nuxt db migrate` stops on that query, nothing has moved: list the
+  blocking keys with the SQL in its message (enabled, in no organization, not linked), delete them
+  or move each one to its organization, then run it again. If it stops on
+  `canceling statement due to lock timeout`, a session held `api_key` for more than 5 seconds:
+  stop it and run it again.
+- [ ] Check readiness: `GET /api/health` answers `503` until the query has added the foreign key.
+  On Cloudflare, whose build has no `DATABASE_URL`, run `npx nuxt db migrate` against the
+  production database before or right after the deploy.
 - [ ] Tell the affected users. A key deleted that way must be recreated by an owner or admin.
 - [ ] Update API clients: a key is created with a top-level `organizationId`
   (`POST /api/auth/api-key/create`), not `metadata.organizationId`; a request without it gets 400

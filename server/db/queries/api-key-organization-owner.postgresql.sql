@@ -11,7 +11,8 @@
 -- 3. Delete the keys that still reference no organization and are disabled
 --    (enabled = false): they no longer authenticate. A NULL enabled counts
 --    as enabled, as better-auth only refuses enabled = false.
--- 4. Stop with an error while enabled keys reference no organization: the
+-- 4. Stop with an error while enabled keys reference no organization and
+--    are not linked: the error prints the SQL that lists them, and the
 --    operator decides (README, Upgrading to organization-owned API keys).
 -- 5. Add the foreign key api_key.reference_id -> organization.id with
 --    ON DELETE CASCADE, so deleting an organization deletes its keys.
@@ -23,6 +24,10 @@
 DO '
 DECLARE
   orphans integer;
+  -- The keys that block the upgrade, also printed for the operator. The
+  -- error rolls the move back, so the listing leaves out the linked keys
+  -- itself, and the disabled ones, which the upgrade deletes.
+  blocking constant text := $q$SELECT k.id, k.reference_id FROM api_key k WHERE k.enabled IS DISTINCT FROM false AND NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = k.reference_id) AND NOT EXISTS (SELECT 1 FROM api_key_organization l WHERE l.api_key_id = k.id)$q$;
 BEGIN
   LOCK TABLE api_key IN SHARE ROW EXCLUSIVE MODE;
 
@@ -36,12 +41,10 @@ BEGIN
   WHERE enabled = false
     AND NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = api_key.reference_id);
 
-  SELECT count(*) INTO orphans
-  FROM api_key
-  WHERE NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = api_key.reference_id);
+  EXECUTE $c$SELECT count(*) FROM ($c$ || blocking || $c$) b$c$ INTO orphans;
 
   IF orphans > 0 THEN
-    RAISE EXCEPTION $msg$% enabled API key(s) belong to no organization, so none was moved. List them with: SELECT id, reference_id FROM api_key WHERE NOT EXISTS (SELECT 1 FROM organization o WHERE o.id = api_key.reference_id); then move or delete them and run it again (README, Upgrading to organization-owned API keys).$msg$, orphans;
+    RAISE EXCEPTION $msg$% enabled API key(s) belong to no organization, so none was moved. List them with: %; then move or delete them and run it again (README, Upgrading to organization-owned API keys).$msg$, orphans, blocking;
   END IF;
 
   IF NOT EXISTS (

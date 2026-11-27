@@ -123,10 +123,35 @@ describeWithPostgres('the API key owner upgrade query', () => {
       const error = await upgradeError()
 
       expect(error.message).toContain('2 enabled API key(s) belong to no organization')
-      expect(error.message).toContain('SELECT id, reference_id FROM api_key WHERE NOT EXISTS')
       expect(error.message).toContain('Upgrading to organization-owned API keys')
       expect(await keys()).toEqual(before)
       expect(await ownerForeignKey()).toEqual([])
+    })
+
+    // The error rolls the move back too: the listing printed for the
+    // operator must still leave out the linked and the disabled keys.
+    it('prints a listing of exactly the keys that block it, and completes once they are gone', async () => {
+      await insertKey('api_key', 'reference_id', 'key-linked', 'user-1')
+      await insertLink('key-linked', 'org-1')
+      await insertKey('api_key', 'reference_id', 'key-disabled', 'user-1', false)
+      await insertKey('api_key', 'reference_id', 'key-enabled', 'user-1')
+      await insertKey('api_key', 'reference_id', 'key-null', 'user-1', null)
+
+      const error = await upgradeError()
+      expect(error.message).toContain('2 enabled API key(s) belong to no organization')
+      const listing = /List them with: (.+?); then/.exec(error.message)?.[1]
+      expect(listing).toBeTruthy()
+      const listed = (await client.query(listing ?? '')).rows
+
+      expect(listed.map(row => row.id).sort()).toEqual(['key-enabled', 'key-null'])
+
+      await client.query('DELETE FROM api_key WHERE id = ANY($1)', [listed.map(row => row.id)])
+      await runUpgrade()
+
+      expect(await keys()).toEqual([
+        { id: 'key-linked', reference_id: 'org-1', key: 'hashed-key-linked', start: 'sk_key-linked', prefix: 'sk_', enabled: true }
+      ])
+      expect(await ownerForeignKey()).toEqual([{ confdeltype: 'c' }])
     })
 
     it('completes once the operator has dealt with the remaining keys', async () => {

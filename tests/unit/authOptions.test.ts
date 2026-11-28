@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '~~/server/db/schema'
+import { RESOLVED_CLIENT_IP_HEADER } from '~~/server/utils/clientIp'
 import { renderSql } from './support/sql'
 
 const db = vi.hoisted(() => {
@@ -62,6 +63,18 @@ describe('the better-auth storage options', () => {
 
   it('stores rate-limit counters in the database', () => {
     expect(options.rateLimit?.storage).toBe('database')
+  })
+})
+
+// better-auth reads the client IP (rate limit, session rows) from headers
+// only. The app resolves it and hands it over in one internal header (#24).
+describe('the better-auth client IP options', () => {
+  it('reads the client IP from the internal header alone', () => {
+    expect(options.advanced?.ipAddress?.ipAddressHeaders).toEqual([RESOLVED_CLIENT_IP_HEADER])
+  })
+
+  it('leaves the proxy chain to the app', () => {
+    expect(options.advanced?.ipAddress?.trustedProxies).toBeUndefined()
   })
 })
 

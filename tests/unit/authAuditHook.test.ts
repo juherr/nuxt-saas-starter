@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { APIError } from 'better-auth/api'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RESOLVED_CLIENT_IP_HEADER } from '~~/server/utils/clientIp'
 
 const runtimeConfig = vi.hoisted(() => ({
   preset: 'cloudflare-module',
@@ -99,5 +100,37 @@ describe('auditing an admin user removal', () => {
       targetId: undefined,
       status: 'failure'
     }))
+  })
+})
+
+describe('the IP recorded by the audit hook', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    betterAuth.mockClear()
+    logAuditEvent.mockClear()
+  })
+
+  // The auth handler resolves the IP and sets the internal header; a
+  // client-sent X-Forwarded-For must not reach the audit row (#24).
+  it('records the resolved IP, not X-Forwarded-For', async () => {
+    const after = await afterHook()
+    const headers: Record<string, string> = {
+      [RESOLVED_CLIENT_IP_HEADER]: '198.51.100.20',
+      'x-forwarded-for': '6.6.6.6',
+      'remoteAddress': '6.6.6.7'
+    }
+
+    await after({ ...removeUserRequest('admin-1', { success: true }), headers: new Headers(headers), getHeader: (name: string) => headers[name] })
+
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ ipAddress: '198.51.100.20' }))
+  })
+
+  it('records no IP when none was resolved', async () => {
+    const after = await afterHook()
+    const headers: Record<string, string> = { 'x-forwarded-for': '6.6.6.6', 'remoteAddress': '6.6.6.7' }
+
+    await after({ ...removeUserRequest('admin-1', { success: true }), headers: new Headers(headers), getHeader: (name: string) => headers[name] })
+
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ ipAddress: undefined }))
   })
 })

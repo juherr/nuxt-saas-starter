@@ -5,6 +5,7 @@ import { callRoute, stubNitroGlobals, stubRequestContext, TEST_AGENT, TEST_IP } 
 const getFile = vi.hoisted(() => vi.fn())
 const deleteFile = vi.hoisted(() => vi.fn())
 const requireAuth = vi.hoisted(() => vi.fn())
+const runtimeConfig = vi.hoisted(() => ({ trustedProxies: '', clientIpHeader: '' }))
 
 vi.mock('~~/server/services/file/fileService', () => ({
   createFileService: async () => ({ getFile, deleteFile })
@@ -13,6 +14,7 @@ vi.mock('~~/server/services/file/fileService', () => ({
 beforeAll(() => {
   stubNitroGlobals()
   vi.stubGlobal('requireAuth', requireAuth)
+  vi.stubGlobal('useRuntimeConfig', () => runtimeConfig)
   stubRequestContext()
 })
 afterAll(() => {
@@ -95,5 +97,31 @@ describe('deleting a file', () => {
   it('answers 404 for an unknown file', async () => {
     await expect(remove('unknown')).rejects.toMatchObject({ statusCode: 404 })
     expect(deleteFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('the IP recorded for a deletion', () => {
+  const removeWith = (headers: Record<string, string>) =>
+    callRoute(() => import('~~/server/api/file/[id].delete'), undefined, undefined, { id: 'f1' }, headers)
+
+  beforeEach(() => {
+    getFile.mockReset().mockResolvedValue({ id: 'f1', uploadedBy: OWNER.id })
+    deleteFile.mockReset().mockResolvedValue(true)
+    requireAuth.mockReset().mockResolvedValue(OWNER)
+    runtimeConfig.trustedProxies = ''
+  })
+
+  it('ignores a forged X-Forwarded-For when no proxy is trusted', async () => {
+    await removeWith({ 'x-forwarded-for': '6.6.6.6' })
+
+    expect(deleteFile).toHaveBeenCalledWith('f1', OWNER.id, TEST_IP, TEST_AGENT)
+  })
+
+  it('records the client behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = TEST_IP
+
+    await removeWith({ 'x-forwarded-for': '198.51.100.7' })
+
+    expect(deleteFile).toHaveBeenCalledWith('f1', OWNER.id, '198.51.100.7', TEST_AGENT)
   })
 })

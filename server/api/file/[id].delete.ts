@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { createFileService } from '~~/server/services/file/fileService'
+import { requestClientIp } from '~~/server/utils/requestClientIp'
 import { isSystemAdmin } from '~~/shared/utils/permissions'
 
 const fileNotFound = () => createError({ statusCode: 404, statusMessage: 'File not found' })
@@ -32,7 +33,7 @@ export default defineEventHandler(async (event) => {
     deleted = await fileService.deleteFile(
       fileId,
       user.id,
-      getRequestIP(event),
+      requestClientIp(event),
       getHeader(event, 'user-agent')
     )
   } catch (error) {

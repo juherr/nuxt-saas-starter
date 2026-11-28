@@ -20,10 +20,12 @@ import { logAuditEvent } from './auditLogger'
 import { AUDITED_SUCCESS_PATHS, resolveAuditTarget } from './authAudit'
 import { organizationAdditionalFields } from './authSchemaFields'
 import { authStorageOptions } from './authStorage'
+import { RESOLVED_CLIENT_IP_HEADER, withResolvedClientIp } from './clientIp'
 import { getDB } from './db'
 import { getResendClient } from './drivers'
 import { renderDeleteAccount, renderResetPassword, renderTeamInvite, renderVerifyEmail } from './email'
 import { memberHasRoleSql } from './memberRoleSql'
+import { requestClientIp } from './requestClientIp'
 import { runtimeConfig } from './runtimeConfig'
 import { checkoutSeatsOverride, createStripeClient, isStripeConfigured, resolveUpgradeReferenceId, setupStripe } from './stripe'
 
@@ -271,6 +273,12 @@ export const createBetterAuth = () => betterAuth({
     }
   ),
   advanced: {
+    // The auth handler resolves the client IP (server/utils/clientIp.ts) and
+    // sets this header alone: better-auth's rate limit and session rows read
+    // it, so they agree with the audit log (#24).
+    ipAddress: {
+      ipAddressHeaders: [RESOLVED_CLIENT_IP_HEADER]
+    },
     database: {
       generateId: () => {
         return uuidv7()
@@ -599,8 +607,7 @@ export const createBetterAuth = () => betterAuth({
       return undefined
     }),
     after: createAuthMiddleware(async (ctx) => {
-      const ipAddress = ctx.getHeader('x-forwarded-for')
-        || ctx.getHeader('remoteAddress') || undefined
+      const ipAddress = ctx.getHeader(RESOLVED_CLIENT_IP_HEADER) || undefined
       const userAgent = ctx.getHeader('user-agent') || undefined
 
       const { targetType, targetId } = resolveAuditTarget({
@@ -733,6 +740,7 @@ export const getAuthSession = async (event: H3Event) => {
     if (value)
       headers.append(key, value)
   }
+  withResolvedClientIp(headers, requestClientIp(event))
 
   const serverAuth = useServerAuth()
   // Bypass the session cookie cache: a removed user or a revoked session

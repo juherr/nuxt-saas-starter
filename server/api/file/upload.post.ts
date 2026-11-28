@@ -10,6 +10,7 @@ import {
   resolveAllowedMimeTypes,
   resolveMaxFileSize
 } from '~~/server/services/file/uploadPolicy'
+import { requestClientIp } from '~~/server/utils/requestClientIp'
 import { DEMO_MODE_RESTRICTED } from '~~/shared/utils/demoMode'
 
 export default defineEventHandler(async (event) => {
@@ -119,7 +120,7 @@ export default defineEventHandler(async (event) => {
       fileData.filename,
       content.type,
       user.id,
-      getRequestIP(event),
+      requestClientIp(event),
       getHeader(event, 'user-agent')
     )
     return {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { H3Event } from 'h3'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { RESOLVED_CLIENT_IP_HEADER } from '~~/server/utils/clientIp'
 
 interface GetSessionOptions {
   headers: Headers
@@ -33,6 +34,9 @@ const event = { headers: new Headers({ cookie: 'better-auth.session_token=signed
 
 beforeAll(() => {
   vi.stubGlobal('getRequestHeaders', (e: { headers: Headers }) => Object.fromEntries(e.headers))
+  vi.stubGlobal('getRequestHeader', (e: { headers: Headers }, name: string) => e.headers.get(name) ?? undefined)
+  vi.stubGlobal('getRequestIP', () => '198.51.100.20')
+  vi.stubGlobal('useRuntimeConfig', () => ({ trustedProxies: '', clientIpHeader: '' }))
 })
 
 const { getAuthSession } = await import('~~/server/utils/auth')
@@ -55,5 +59,18 @@ describe('getAuthSession', () => {
     if (!call)
       throw new Error('getSession was not called')
     expect(call[0].headers.get('cookie')).toBe('better-auth.session_token=signed-token')
+  })
+
+  // In-process calls reach better-auth too: they carry the resolved IP, never
+  // a client-sent value of the internal header (#24).
+  it('replaces a client-sent internal IP header with the resolved IP', async () => {
+    const forged = { headers: new Headers({ [RESOLVED_CLIENT_IP_HEADER]: '6.6.6.6', 'x-forwarded-for': '6.6.6.6' }) } as H3Event
+
+    await getAuthSession(forged)
+
+    const call = getSession.mock.lastCall
+    if (!call)
+      throw new Error('getSession was not called')
+    expect(call[0].headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe('198.51.100.20')
   })
 })

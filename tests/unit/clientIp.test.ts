@@ -100,6 +100,16 @@ describe('resolving the client IP with nothing configured', () => {
   it('answers undefined for a socket address that is not an IP', () => {
     expect(resolveClientIp(request('unix:/run/app.sock'), config)).toBeUndefined()
   })
+
+  it('reads an embedded IPv4 only in the last group of an IPv6 address', () => {
+    expect(resolveClientIp(request('::1.2.3.4'), config)).toBe('::1.2.3.4')
+    expect(resolveClientIp(request('::ffff:1.2.3.4'), config)).toBe('1.2.3.4')
+    expect(resolveClientIp(request('64:ff9b::1.2.3.4'), config)).toBe('64:ff9b::1.2.3.4')
+  })
+
+  it('rejects an IPv4 placed before a trailing ::', () => {
+    expect(resolveClientIp(request('1.2.3.4::'), config)).toBeUndefined()
+  })
 })
 
 describe('resolving the client IP behind a trusted proxy', () => {

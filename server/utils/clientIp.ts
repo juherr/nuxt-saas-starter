@@ -51,7 +51,8 @@ function ipv6Bytes(value: string): Uint8Array | null {
   const groupsOf = (half: string | undefined) => (half ? half.split(':') : [])
   const head = groupsOf(halves[0])
   const tail = groupsOf(halves[1])
-  const last = tail.length > 0 ? tail : head
+  // Only the last group may hold an embedded IPv4: after `::`, that is `tail`.
+  const last = halves.length === 2 ? tail : head
   const embedded = last.at(-1)?.includes('.') ? ipv4Bytes(last.pop() ?? '') : undefined
   if (embedded === null) {
     return null

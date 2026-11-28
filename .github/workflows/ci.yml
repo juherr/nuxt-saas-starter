@@ -48,6 +48,11 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Job-level permissions replace the workflow's: keep contents: read and
+    # add the OIDC token the Codecov upload signs in with.
+    permissions:
+      contents: read
+      id-token: write
     # The rate limiter's Redis test runs against the Redis service, the
     # database upgrade query tests against the PostgreSQL one (each test file
     # creates its own database through TEST_DATABASE_URL); with CI set and
@@ -82,7 +87,23 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
-      - run: pnpm test:ci
+      # Same projects as `pnpm test:ci`, run once with coverage on.
+      - run: pnpm test:ci:coverage
+      - name: Check the coverage report exists
+        run: |
+          if [ ! -s tests/coverage/lcov.info ]; then
+            echo "::error::tests/coverage/lcov.info is missing or empty: no coverage to upload"
+            exit 1
+          fi
+      # OIDC needs id-token: write; on a fork PR GitHub gives no token and
+      # the action falls back to a tokenless upload, so no secret is exposed.
+      # An upload failure (app not installed, Codecov down) does not fail CI.
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          use_oidc: true
+          files: tests/coverage/lcov.info
+          disable_search: true
+          fail_ci_if_error: false
 
   # Builds with no database, Redis, Stripe, Resend or other secret, then
   # deploys that build the way docs/SELF_HOSTING_NODE.md describes:

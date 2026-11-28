@@ -17,6 +17,8 @@
 
 ## House of Better Auth Nuxt SaaS Starter
 
+[![codecov](https://codecov.io/gh/juherr/nuxt-saas-starter/graph/badge.svg)](https://codecov.io/gh/juherr/nuxt-saas-starter)
+
 A production-ready Nuxt SaaS starter with authentication, billing, teams, and more.
 
 > **Note:** This template is opinionated and built for my own apps. It's designed specifically for:
@@ -419,6 +421,30 @@ See [docs/MIGRATION_CHECKLIST.md](docs/MIGRATION_CHECKLIST.md) for migration che
 </details>
 
 ---
+
+## Coverage
+
+`pnpm test:ci:coverage` (or `pnpm coverage`) runs the unit and component tests, the same projects
+as `pnpm test:ci`, with V8 coverage. It prints a summary and writes to `tests/coverage/`:
+
+- `index.html`, the report to browse locally;
+- `lcov.info`, the file CI uploads to Codecov.
+
+Every source under `app/`, `server/`, `shared/`, `emails/` and `create-admin.ts` is listed, at 0 %
+when no test loads it. Type declarations, build outputs, migrations and the generated
+`server/db/schema/auth.ts` are left out. The e2e suite is not measured: it tests a built server in
+another process.
+
+The CI `unit` job uploads `lcov.info` with
+[codecov/codecov-action](https://github.com/codecov/codecov-action), signed in through GitHub OIDC
+(`id-token: write` on that job only), so no `CODECOV_TOKEN` secret is needed. Pull requests from
+forks get no OIDC token and upload tokenless. An upload failure does not fail the build; a missing
+`lcov.info` does.
+
+To turn the reports on in a fork of this starter, install the
+[Codecov GitHub app](https://github.com/apps/codecov) on the repository and point the badge above at
+it. `codecov.yml` keeps the project and patch statuses informational and posts a coverage diff on
+pull requests. Blocking thresholds are left for later, once the baseline has been reviewed.
 
 ## Features
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Coverage of the unit and component tests reported to Codecov from the CI `unit` job (OIDC,
+  tokenless on fork pull requests, informational statuses only), with a README badge;
+  `pnpm test:ci:coverage` writes the HTML and LCOV reports to `tests/coverage`, and
+  `pnpm coverage` now runs the same projects instead of the e2e suite too
+  ([#66](https://github.com/juherr/nuxt-saas-starter/issues/66))
+
 ### Security
 
 - **Breaking:** forwarded client IPs are trusted only from configured proxies. The audit log, Better

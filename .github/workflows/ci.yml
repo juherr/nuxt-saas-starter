@@ -493,8 +493,11 @@ jobs:
       # mode better-auth allows 3 requests per 10 s to each /sign-in path
       # per client IP, and the suite signs in more often than that from
       # one IP (auth.test.ts alone five times), so it would get 429s.
+      # The pid lets the production pass below stop this server.
       - name: Start the server
-        run: node .output/server/index.mjs > server.log 2>&1 &
+        run: |
+          node .output/server/index.mjs > server.log 2>&1 &
+          echo $! > server.pid
       - name: Wait for /api/health
         run: .github/scripts/smoke-wait-health.sh
       - name: Seed the admin
@@ -518,6 +521,51 @@ jobs:
           pnpm exec vitest run --project e2e
           --reporter=default --reporter=junit
           --outputFile.junit=test-results/e2e/junit.xml
+      # Production pass (#196): the same build, restarted with
+      # NODE_ENV=production on the same port (NUXT_APP_URL and
+      # NUXT_PUBLIC_BASE_URL pin the origins to :3000), runs
+      # tests/e2e/production-session.test.ts alone. That file signs in
+      # once through the browser form, then creates a team and switches
+      # teams through the UI switcher. What this proves, and no more:
+      # - better-auth's rate limiter is on and counts browser sign-ins:
+      #   rate_limit stays empty while the server runs without NODE_ENV,
+      #   and smoke-rate-limit.sh then requires a /sign-in and a
+      #   /get-session bucket keyed by a resolved client IP;
+      # - the production build serves sign-in and organization switching
+      #   (set-active, full reload, SSR of the new team) under
+      #   NODE_ENV=production;
+      # - the file stays under the 3 sign-ins per 10 s limit: signing in
+      #   once per test turns this step red with a 429.
+      # Not covered: secure cookies. better-auth adds Secure and the
+      # __Secure- prefix only for an https baseURL (useSecureCookies,
+      # dist/cookies/index.mjs), and http://localhost:3000 is http.
+      - name: Restart the server with NODE_ENV=production
+        run: |
+          pid=$(cat server.pid)
+          kill "$pid"
+          for _ in $(seq 30); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "::error::the e2e server did not stop within 30 seconds"
+            exit 1
+          fi
+          NODE_ENV=production node .output/server/index.mjs > server-production.log 2>&1 &
+      - name: Wait for /api/health (production)
+        run: .github/scripts/smoke-wait-health.sh
+      - name: Run the production session e2e test
+        timeout-minutes: 5
+        run: >-
+          pnpm exec vitest run --project e2e tests/e2e/production-session.test.ts
+          --reporter=default --reporter=junit
+          --outputFile.junit=test-results/e2e-production/junit.xml
+      - name: Check the rate limiter counted the browser sign-in
+        run: .github/scripts/smoke-rate-limit.sh
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          POSTGRES_USER: smoke
+          POSTGRES_DB: smoke
       # tests/e2e/setup.ts writes a screenshot of each page a failed test
       # opened into test-results/e2e/.
       - name: Upload the server log, screenshots and test report
@@ -527,5 +575,7 @@ jobs:
           name: e2e-results
           path: |
             server.log
+            server-production.log
             sign-up-body.txt
             test-results/e2e/
+            test-results/e2e-production/

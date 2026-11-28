@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Coverage of the unit and component tests reported to Codecov from the CI `unit` job (OIDC,
-  tokenless on fork pull requests, informational statuses only), with a README badge;
-  `pnpm test:ci:coverage` writes the HTML and LCOV reports to `tests/coverage`, and
-  `pnpm coverage` now runs the same projects instead of the e2e suite too
-  ([#66](https://github.com/juherr/nuxt-saas-starter/issues/66))
+  tokenless on fork pull requests), with a README badge; a pull request fails `codecov/patch`
+  below 80% of its changed lines covered, and the auth, billing and org-access components each
+  fail when their coverage drops more than 1% below the base or under a fixed floor (auth 73%,
+  org-access 61%, billing 45%), while the project status stays informational; `pnpm test:ci:coverage` writes the HTML and LCOV reports to `tests/coverage`,
+  and `pnpm coverage` now runs the same projects instead of the e2e suite too
+  ([#66](https://github.com/juherr/nuxt-saas-starter/issues/66),
+  [#186](https://github.com/juherr/nuxt-saas-starter/issues/186))
 
 ### Changed
 

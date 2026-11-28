@@ -329,7 +329,7 @@ fetches no tags: a release build needs `fetch-tags: true` on
 
 **Caching:**
 - **Cloudflare KV** — no Redis needed when hosting on Cloudflare (used for session caching)
-- **Node.js** — Redis is optional: sessions go through NuxtHub KV, which uses Redis only when `REDIS_URL` is set at build time, and otherwise stores them under `.data/kv` (keep that directory persistent)
+- **Node.js** — Redis is optional: sessions go to Redis when `REDIS_URL` is set when the server starts (or was set at build time), and otherwise under `.data/kv` (keep that directory persistent)
 
 The app automatically uses Cloudflare KV when deployed to Cloudflare Workers. No additional configuration needed.
 
@@ -410,7 +410,7 @@ npx wrangler deploy
 | Environment | Database | Cache |
 |-------------|----------|-------|
 | Cloudflare Workers | Hyperdrive | KV |
-| Node.js hosting | `DATABASE_URL` | NuxtHub KV: Redis if `REDIS_URL` is set at build, else `.data/kv` |
+| Node.js hosting | `DATABASE_URL` | Redis if `REDIS_URL` is set at run time (or was at build), else `.data/kv` |
 
 ### Full Documentation
 

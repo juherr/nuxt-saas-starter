@@ -2,8 +2,10 @@
 
 - Vitest projects (`vitest.config.ts`): `unit` = `tests/unit/**` (node; `~~` → root, `hub:kv` →
   `unit/stubs/hub-kv.ts`), `nuxt` = `tests/components/**` (happy-dom), `e2e` = `tests/e2e/**`.
-  Scripts: root `CLAUDE.md` § Checks. `uploadRateLimiterRedis.test.ts` needs `REDIS_URL`: skipped
-  locally without it, it fails when `CI` is set (the CI `unit` job provides Redis 7).
+  Scripts: root `CLAUDE.md` § Checks. `uploadRateLimiterRedis.test.ts` and the key-format suite of
+  `cacheBackend.test.ts` need `REDIS_URL`: skipped locally without it, they fail when `CI` is set (the
+  CI `unit` job provides Redis 7). Under that job the real `cacheClient` (`drivers.ts`) picks Redis:
+  a test that needs it on `hub:kv` builds its own with `createCacheClient({ kv, redis: async () => null })`.
   Postgres suites (`describeWithPostgres`, `unit/support/postgres.ts`) need `TEST_DATABASE_URL`, an
   admin URL: each file creates and drops its own database; same skip/fail rule (CI: Postgres 16).
 - One file: `pnpm vitest run <file>` (unit), `pnpm vitest run --project nuxt <file>` (components).

@@ -69,23 +69,37 @@ npx nuxt db mark-as-migrated 0000_<name>
 
 ## 2. Sessions and KV
 
-`NUXT_REDIS_URL` (`runtimeConfig.redisUrl`) is not read by any code. Only the upload rate limiter
-talks to Redis directly (see below). Better Auth keeps its sessions in NuxtHub KV (`hub:kv`, used as `secondaryStorage`), and
-NuxtHub chooses the KV driver **when the app is built**:
+Better Auth keeps its sessions in its `secondaryStorage`, `cacheClient`
+(`server/utils/drivers.ts`). With the `node-server` preset, `cacheClient` picks its store from the
+**run** environment, on first use:
 
-| Build environment | KV driver |
-|-------------------|-----------|
+| Run environment (`node-server`) | Session store |
+|---------------------------------|---------------|
 | `REDIS_URL` set (or `KV_URL` starting with `rediss://`) | Redis, through `ioredis` |
-| `NUXT_NITRO_PRESET=cloudflare-module` | Cloudflare KV binding `KV` |
+| neither | NuxtHub KV (`hub:kv`), with the driver chosen at build (below) |
+
+So one artifact, built without Redis, can be deployed with and without it: set `REDIS_URL` when
+the server starts. `NUXT_REDIS_URL` (`runtimeConfig.redisUrl`) is still read by nothing
+([#169](https://github.com/juherr/nuxt-saas-starter/issues/169)): use `REDIS_URL`.
+
+NuxtHub chooses the `hub:kv` driver **when the app is built**, and writes it and its options,
+including the Redis URL, into the build output:
+
+| Build environment | `hub:kv` driver |
+|-------------------|-----------------|
+| `REDIS_URL` set (or `KV_URL` starting with `rediss://`) | Redis, through `ioredis` |
+| `NUXT_NITRO_PRESET=cloudflare-module` | Cloudflare KV binding `KV` (sessions always go there: `cacheClient` never loads `ioredis` on Cloudflare) |
 | none of the above | `fs-lite`, files under `.data/kv` |
 
-The driver and its options, including the Redis URL, are written into the build output. Changing
-them means building again.
+Building with `REDIS_URL` still bakes Redis into `hub:kv`. That is harmless: `cacheClient` writes
+the same keys, values and TTLs as that driver (unstorage's `redis` driver, no key prefix), so the
+sessions of a deployment built with `REDIS_URL` survive the upgrade, and such a build started
+without `REDIS_URL` keeps using the Redis it was built with.
 
-With the default `fs-lite` driver, `.data/kv` is resolved from the **working directory of the
+With the `fs-lite` driver, `.data/kv` is resolved from the **working directory of the
 server process**. It holds the sessions: keep it writable and persistent (a volume, in a
 container); losing it signs every user out. Run a single instance with it; for
-several instances behind a load balancer, build with `REDIS_URL` so that they share sessions.
+several instances behind a load balancer, set `REDIS_URL` so that they share sessions.
 
 ### Expired entries with `fs-lite`
 
@@ -96,7 +110,7 @@ counters (one per user and window, 1 minute by default) stay on disk after they 
 `.data/kv` keeps growing. Reading them is harmless: Better Auth checks a session's own expiry,
 and an old rate-limit window is never read again.
 
-Redis honours the TTLs: build with `REDIS_URL` in production. With `fs-lite`, delete from a
+Redis honours the TTLs: set `REDIS_URL` in production. With `fs-lite`, delete from a
 daily cron job the files that have not been written for longer than the longest TTL:
 
 ```bash
@@ -176,9 +190,9 @@ How strictly the limit holds depends on the backend:
 | `fs-lite` or any other non-Redis KV | Exact on a single instance only (per-process lock); several instances can each accept up to the limit |
 | Cloudflare KV | Best effort: the store is eventually consistent, so concurrent requests can exceed the limit |
 
-The limiter reads `REDIS_URL` / `KV_URL` from the environment **at run time**, while NuxtHub bakes
-the KV URL into the build. Set `REDIS_URL` in the run environment too, not only for the build;
-without it the limiter falls back to the per-process lock. With an Upstash REST configuration
+The limiter reads `REDIS_URL` / `KV_URL` from the environment **at run time**, as the sessions do
+(section 2), through the same shared client. Set `REDIS_URL` in the run environment, not only for
+the build; without it the limiter falls back to the per-process lock. With an Upstash REST configuration
 (`KV_REST_API_*` or `UPSTASH_REDIS_REST_*`), the limiter is not atomic across instances unless
 `REDIS_URL` is also set.
 
@@ -359,4 +373,5 @@ values only (no repository secret):
 | `typecheck` | `pnpm typecheck` (`nuxt typecheck`), which must report no error |
 | `unit` | `pnpm test:ci:coverage`: unit tests (`tests/unit`) and component tests in the Nuxt runtime (`tests/components`) with coverage, then uploads `tests/coverage/lcov.info` to Codecov (README › Coverage); the e2e suite (`tests/e2e`) runs locally with `pnpm test` |
 | `smoke-build-without-db` | `NUXT_NITRO_PRESET=node-server pnpm build` without a database, Redis, Stripe or Resend, then against a `postgres:16` service: `pnpm db:generate`, `pnpm exec nuxt db migrate` with `DATABASE_URL`, starts `.output/server/index.mjs` with `NUXT_DATABASE_URL`, `NUXT_PUBLIC_BASE_URL`, `NUXT_BETTER_AUTH_SECRET` and `PORT`, waits for `GET /api/health`, seeds an admin with `create-admin.ts` and signs in with it. The server log and the sign-in responses are uploaded as an artifact when the job fails. |
+| `smoke-redis-at-runtime` | The same build without `REDIS_URL` and the same steps against `postgres:16` and `redis:7` services, but the server starts with `REDIS_URL` as well. After the sign-in, `.github/scripts/smoke-kv-session.sh` checks that `redis-cli --scan` lists the session token and its `active-sessions-<user id>` list, and that `.data/kv` holds no entry. |
 | `smoke-node` | Against `postgres:16` and `redis:7` services: `pnpm db:generate`, `pnpm build` (which applies the migrations), starts `.output/server/index.mjs`, waits for `GET /api/health`, resets the database to the demo seed (`pnpm demo:reset` with `DEMO_RESET_CONFIRM=localhost`), seeds an admin with `create-admin.ts` and expects `POST /api/auth/sign-in/email` to answer `200` with a `better-auth.session_token` cookie. It then runs `pnpm demo:reset` a second time, which proves the reset is idempotent over a seeded database, and signs in the same way as `demo@example.com`. The server log and the sign-in responses are uploaded as an artifact when the job fails. |

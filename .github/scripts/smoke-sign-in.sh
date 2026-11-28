@@ -40,13 +40,10 @@ if ! smoke_request "$label" 200 "$label-body.txt" \
     exit 1
   fi
   echo "::error::$label answered $SMOKE_STATUS instead of 200"
-  # Without a 200 no session exists, so the headers and body hold nothing
-  # secret and are printed as they are.
-  echo "--- $label response headers ---"
-  cat "$label-headers.txt"
-  echo "--- $label response body ---"
-  cat "$label-body.txt"
-  echo
+  # A non-200 is no proof that the headers and body hold nothing secret,
+  # and the demo's Actions logs are public: only the status and the
+  # better-auth error code are printed. The files stay on disk.
+  smoke_error_code "$label" "$label-body.txt"
   exit 1
 fi
 # Over HTTPS better-auth adds the __Secure- prefix to the cookie name.

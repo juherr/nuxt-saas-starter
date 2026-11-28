@@ -38,3 +38,20 @@ smoke_request() {
   done
   return 1
 }
+
+# smoke_error_code <label> <body file>
+#
+# Prints "<label> error code: <code>" when the body is a JSON object whose
+# "code" is a string of capitals, digits and underscores (better-auth
+# error codes such as INVALID_EMAIL_OR_PASSWORD), and nothing otherwise,
+# a non-JSON or missing body included. Always returns 0. Nothing else from
+# a response reaches the log: the demo's Actions logs are public, and an
+# error answer is no proof that headers or body hold nothing secret.
+smoke_error_code() {
+  local code
+  code=$(jq -r 'if type == "object" and (.code | type) == "string"
+    then .code else empty end' "$2" 2>/dev/null) || return 0
+  if [[ $code =~ ^[A-Z0-9_]+$ ]]; then
+    echo "$1 error code: $code"
+  fi
+}

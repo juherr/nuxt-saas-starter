@@ -33,8 +33,8 @@ if ! smoke_request "$1 change-password" 403 "$body" \
   -d '{"currentPassword":"not-the-demo-password","newPassword":"demo-smoke-new-password"}' \
   || ! grep -q 'DEMO_MODE_RESTRICTED' "$body"; then
   echo "::error::change-password answered $SMOKE_STATUS, not 403 DEMO_MODE_RESTRICTED: demo mode is off"
-  cat "$body" 2>/dev/null || true
-  echo
+  # The request carries the session: print the error code, not the body.
+  smoke_error_code "$1 change-password" "$body"
   exit 1
 fi
 echo "$1 change-password refused with DEMO_MODE_RESTRICTED"

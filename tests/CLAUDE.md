@@ -32,3 +32,16 @@
   `e2eScreenshotPatch.test.ts` fails if `@nuxt/test-utils` launches another copy of playwright-core).
   To check the screenshots by hand, run the suite with a wrong `NUXT_APP_NAME`: the tests that look
   for the title fail and leave PNGs there.
+- e2e under `NODE_ENV=production`: the job runs the suite on a server started without `NODE_ENV`
+  (better-auth's limiter, on only in production, allows 3 sign-ins per 10 s per IP), then restarts
+  the same build with `NODE_ENV=production` on the same port and runs `production-session.test.ts`
+  alone, then `smoke-rate-limit.sh`. That file signs in **once** through the form (shared page, tests
+  in order; a sign-in per test makes the production run fail with a 429) and switches teams through
+  the UI switcher, on `/<slug>/settings` since a second owned team is sent to billing elsewhere. Team
+  names carry a per-run suffix: the file runs twice on one database. Proven: the limiter is on and
+  counts browser sign-ins (`rate_limit` stays empty without `NODE_ENV`), and sign-in and team
+  switching work on the production build in production mode. Not proven: secure cookies. better-auth
+  sets `Secure` and the `__Secure-` prefix only for an https `baseURL` (`useSecureCookies` in
+  `better-auth/dist/cookies/index.mjs`), so the job's http origin gets neither. Locally: stop the
+  server, start it with `NODE_ENV=production`, then `pnpm exec vitest run --project e2e
+  tests/e2e/production-session.test.ts`; wait 10 s between two runs against that server.

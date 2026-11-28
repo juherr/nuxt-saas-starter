@@ -75,19 +75,63 @@ describe('smoke_redact_headers', () => {
   })
 })
 
+const bodyTokens = ['bodySessionToken789', 'nested\\"Token\\\\Escaped', 'spacedToken000']
+
+// A better-auth sign-in answer (compact), plus a nested and a spaced token.
+const body = `{"redirect":false,"token":"${bodyTokens[0]}","user":{"id":"u1","email":"a@example.com","session":{"token":"${bodyTokens[1]}"}},"other": { "token" : "${bodyTokens[2]}" },"tokenCount":2}\n`
+
+function expectBodyRedacted(file: string) {
+  const redacted = readFileSync(file, 'utf8')
+  for (const token of bodyTokens)
+    expect(redacted).not.toContain(token)
+  expect(JSON.parse(redacted)).toEqual({
+    redirect: false,
+    token: '[redacted]',
+    user: { id: 'u1', email: 'a@example.com', session: { token: '[redacted]' } },
+    other: { token: '[redacted]' },
+    tokenCount: 2
+  })
+}
+
+describe('smoke_redact_body', () => {
+  it('replaces every JSON "token" string and keeps the rest of the body', () => {
+    const file = join(dir, 'sign-in-body.txt')
+    writeFileSync(file, body)
+    const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, file])
+    expect(result.status).toBe(0)
+    expectBodyRedacted(file)
+  })
+
+  it('leaves a non-JSON body as it is', () => {
+    const file = join(dir, 'page-body.txt')
+    const page = '<html>error code: 1102 token=abc</html>\n'
+    writeFileSync(file, page)
+    const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, file])
+    expect(result.status).toBe(0)
+    expect(readFileSync(file, 'utf8')).toBe(page)
+  })
+
+  it('succeeds on a missing body file', () => {
+    const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, join(dir, 'none.txt')])
+    expect(result.status).toBe(0)
+  })
+})
+
 describe('smoke_request', () => {
-  it('redacts the headers file it was given with -D', () => {
+  it('redacts the body file and the headers file it was given with -D', () => {
     // A curl stand-in that writes the fixture to the -D file.
     const bin = join(dir, 'bin')
     mkdirSync(bin)
     const fixture = join(dir, 'fixture.txt')
     writeFileSync(fixture, headers)
+    const bodyFixture = join(dir, 'body-fixture.txt')
+    writeFileSync(bodyFixture, body)
     writeFileSync(join(bin, 'curl'), [
       '#!/usr/bin/env bash',
       'while [ "$#" -gt 0 ]; do',
       '  case "$1" in',
       '    -D) cp "$FIXTURE" "$2"; shift ;;',
-      '    -o) echo "{}" > "$2"; shift ;;',
+      '    -o) cp "$BODY_FIXTURE" "$2"; shift ;;',
       '  esac',
       '  shift',
       'done',
@@ -99,9 +143,10 @@ describe('smoke_request', () => {
     const result = bash(
       '. "$1" && smoke_request sign-in 200 "$2" -D "$3" -X POST http://localhost/api/auth/sign-in/email',
       [smokeRequest, join(dir, 'body.txt'), file],
-      { ...process.env, FIXTURE: fixture, PATH: `${bin}:${process.env.PATH}` }
+      { ...process.env, FIXTURE: fixture, BODY_FIXTURE: bodyFixture, PATH: `${bin}:${process.env.PATH}` }
     )
     expect(result.status).toBe(0)
     expectRedacted(file)
+    expectBodyRedacted(join(dir, 'body.txt'))
   })
 })

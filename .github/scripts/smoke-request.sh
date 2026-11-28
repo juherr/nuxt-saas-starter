@@ -28,14 +28,31 @@ smoke_redact_headers() {
   mv "$file.redacted" "$file"
 }
 
+# smoke_redact_body <body file>
+#
+# Replaces the value of every JSON "token" string field, at any depth,
+# with "[redacted]", in place: better-auth's sign-in and sign-up answers
+# carry the session token in their body, and CI uploads the body files
+# too. The rest of the body is kept for diagnostics, and a body that is
+# not JSON only loses that pattern. A missing file is left alone.
+smoke_redact_body() {
+  local file=$1
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+  sed -E 's/("token"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"[redacted]"/g' \
+    "$file" > "$file.redacted"
+  mv "$file.redacted" "$file"
+}
+
 # smoke_request <label> <expected status> <body file> <curl args...>
 #
 # Sets SMOKE_STATUS to the last status (000 when curl got no answer) and
 # returns 0 when it equals the expected one. Retries on 000, 503 or a body
 # holding "error code: 1102"; any other unexpected answer returns 1 at
 # once. Prints neither headers nor body: a response may carry a session.
-# A headers file given as `-D <file>` is passed through
-# smoke_redact_headers after every try.
+# After every try, the body file goes through smoke_redact_body and a
+# headers file given as `-D <file>` through smoke_redact_headers.
 smoke_request() {
   local label=$1 expected=$2 body=$3 attempt arg headers=
   local attempts=${SMOKE_RETRY_ATTEMPTS:-1} delay=${SMOKE_RETRY_DELAY:-5}
@@ -50,6 +67,7 @@ smoke_request() {
   for ((attempt = 1; attempt <= attempts; attempt++)); do
     SMOKE_STATUS=$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' "$@") \
       || SMOKE_STATUS=000
+    smoke_redact_body "$body"
     if [ -n "$headers" ]; then
       smoke_redact_headers "$headers"
     fi

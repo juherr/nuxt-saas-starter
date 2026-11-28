@@ -28,9 +28,13 @@ status=$(curl -sS --max-time 30 -o sign-up-body.txt -w '%{http_code}' \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
   -d "$body") || {
+  smoke_redact_body sign-up-body.txt
   echo "::error::sign-up request failed"
   exit 1
 }
+# The answer carries the new user's session token, and CI uploads this
+# file on failure; .user.id, read below, stays.
+smoke_redact_body sign-up-body.txt
 echo "sign-up status: $status"
 if [ "$status" != "200" ]; then
   echo "::error::sign-up answered $status instead of 200"

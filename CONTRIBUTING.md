@@ -38,7 +38,32 @@ or `Security`.
 - Test-only changes, refactors and internal CI tweaks need no entry.
 
 On release, the `[Unreleased]` entries move under a new `## [x.y.z] - YYYY-MM-DD` heading, and
-the link references at the bottom of the file are updated.
+the link references at the bottom of the file are updated: see [Releasing](#releasing).
+
+## Releasing
+
+A release closes a milestone whose issues are all closed.
+
+1. Open a `docs: release vX.Y.Z` pull request that moves the `[Unreleased]` entries under
+   `## [x.y.z] - YYYY-MM-DD`, leaves an empty `## [Unreleased]` above it, opens the section with
+   the breaking changes to act on, and updates the link references at the bottom of the file
+   (`[unreleased]` compares from the new tag, `[x.y.z]` compares the previous tag with it). Give
+   every entry without one its pull request link.
+2. Squash-merge it once CI is green, and check that `CHANGELOG.md` at the merge commit has nothing
+   under `[Unreleased]`: another pull request may have landed first.
+3. Tag that merge commit by its full SHA, not `main`:
+   `git tag -a vX.Y.Z <sha> -m "vX.Y.Z — <milestone title>"`, then `git push origin vX.Y.Z`. Tag
+   after the changelog cut: v0.1.0 was tagged before it, so its tree has no `[0.1.0]` section.
+4. Publish the GitHub release under the milestone's title
+   (`gh release create vX.Y.Z --verify-tag --title "<title>" --notes-file <file>`). The notes start
+   with a "Before you upgrade" list of the breaking changes, followed by the section, with its
+   relative links rewritten, since they break in a release body:
+
+   ```bash
+   sed -E 's#\]\((README\.md|docs/[A-Za-z_./-]+)#](https://github.com/juherr/nuxt-saas-starter/blob/vX.Y.Z/\1#g'
+   ```
+
+5. Close the milestone.
 
 ## Licensing
 

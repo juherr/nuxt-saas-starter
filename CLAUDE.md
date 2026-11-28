@@ -80,6 +80,7 @@
   name) to `trustPolicyExclude` with a comment.
 - Conventional Commits (commitlint `commit-msg` hook; PR title and commits in CI) and a Keep a
   Changelog entry under `[Unreleased]` for user-visible changes: `CONTRIBUTING.md`.
+- Releases (changelog cut, tag, GitHub release, milestone): `CONTRIBUTING.md` › Releasing.
 - GitHub Actions are pinned to a commit SHA with the exact version as an end-of-line comment
   (`@<sha> # v4.4.0`); Dependabot bumps both.
 - New files start with an SPDX MIT header (README › License); `reuse lint`

@@ -46,20 +46,9 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
-      # Same steps as .github/actions/setup: Node from mise.toml, setup-node
-      # only for the pnpm store cache.
-      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
-        with:
-          # Dependabot does not bump this input: bump it by hand with the
-          # action (also in .github/actions/setup/action.yml).
-          version: 2026.11.14
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          cache: pnpm
-      - run: .github/scripts/check-node-version.sh
-      # postinstall runs nuxt prepare.
-      - run: pnpm install --frozen-lockfile
+      # Read from the tree checked out above, at the CI run's head SHA.
+      # Its pnpm install runs postinstall, hence nuxt prepare.
+      - uses: ./.github/actions/setup
       - name: Generate migrations
         run: pnpm db:generate
       # DEMO_DATABASE_URL is the direct (non-pooler) Neon URL of the owner
@@ -88,19 +77,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
-      # Same steps as .github/actions/setup: Node from mise.toml, setup-node
-      # only for the pnpm store cache.
-      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
-        with:
-          # Dependabot does not bump this input: bump it by hand with the
-          # action (also in .github/actions/setup/action.yml).
-          version: 2026.11.14
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          cache: pnpm
-      - run: .github/scripts/check-node-version.sh
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
       # Before the build: the cloudflare-module preset merges the root
       # wrangler.jsonc into .output/server/wrangler.json, which is the file
       # wrangler deploy then uses. Rendered after the build, the worker

@@ -20,11 +20,24 @@ on:
 # One run at a time, and no running one is cancelled: a reset or a deploy
 # stopped halfway would leave the demo broken. GitHub still keeps a single
 # pending run per group: a newer run replaces the pending one. A run that
-# fails the gate (CI not green, not a push, or a fork's main) skips all its
-# jobs, so it gets a group of its own and cannot displace a pending run.
-# The gate here and the reset job's if: must stay the same text.
+# fails the gate (CI not green, not a push, a fork's main, or not the tip
+# of main) skips all its jobs, so it gets a group of its own,
+# demo-skipped-<run id>, and cannot displace a pending run.
+#
+# On workflow_run, github.sha is the last commit on the default branch when
+# this run is created ("Last commit on default branch",
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run),
+# and the workflow definition is read from there, while the jobs check out
+# the CI run's head_sha. When several pushes land in a row, the CI run of
+# an older commit completes after main has moved on: its Demo run would mix
+# the steps of the tip with the scripts of the older commit. Requiring
+# head_sha == github.sha skips that run; the CI run of the tip triggers its
+# own. Workflow definition and checked-out scripts then come from the same
+# commit.
+# The gate here and the reset job's if: must stay the same text
+# (tests/unit/demoWorkflowGate.test.ts).
 concurrency:
-  group: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)) && 'demo' || format('demo-skipped-{0}', github.run_id) }}
+  group: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha == github.sha)) && 'demo' || format('demo-skipped-{0}', github.run_id) }}
   cancel-in-progress: false
 
 permissions:
@@ -35,10 +48,12 @@ jobs:
     # workflow_run fires for every completed CI run whose head branch is
     # named main, including a pull request from a fork's own main branch.
     # Without the event and repository checks, that fork's code would run
-    # here with the demo secrets. On schedule and workflow_dispatch,
-    # github.event.workflow_run is null and only the first test applies.
+    # here with the demo secrets. The head_sha test skips a CI run that is
+    # no longer the tip of main (see the concurrency comment above). On
+    # schedule and workflow_dispatch, github.event.workflow_run is null and
+    # only the first test applies.
     # Keep this text identical to the gate of the concurrency group above.
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_sha == github.sha)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

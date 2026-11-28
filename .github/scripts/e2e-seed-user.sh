@@ -10,6 +10,9 @@
 # $POSTGRES_CONTAINER (`docker exec`), as $POSTGRES_USER on $POSTGRES_DB.
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=smoke-request.sh
+. "$(dirname "$0")/smoke-request.sh"
+
 : "${NUXT_APP_URL:?NUXT_APP_URL must be set}"
 : "${NUXT_TEST_EMAIL:?NUXT_TEST_EMAIL must be set}"
 : "${NUXT_TEST_PASSWORD:?NUXT_TEST_PASSWORD must be set}"
@@ -25,14 +28,19 @@ status=$(curl -sS --max-time 30 -o sign-up-body.txt -w '%{http_code}' \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
   -d "$body") || {
+  smoke_redact_body sign-up-body.txt
   echo "::error::sign-up request failed"
   exit 1
 }
+# The answer carries the new user's session token, and CI uploads this
+# file on failure; .user.id, read below, stays.
+smoke_redact_body sign-up-body.txt
 echo "sign-up status: $status"
 if [ "$status" != "200" ]; then
   echo "::error::sign-up answered $status instead of 200"
-  cat sign-up-body.txt
-  echo
+  # The job log is public, and an error answer is no proof that the body
+  # holds nothing secret: only the better-auth error code is printed.
+  smoke_error_code sign-up sign-up-body.txt
   exit 1
 fi
 # By id: better-auth stores the email lowercased, so NUXT_TEST_EMAIL

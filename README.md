@@ -77,6 +77,9 @@ pinned only by `packageManager` in `package.json`, run through Corepack. The com
 `corepack enable` assume mise is [activated](https://mise.jdx.dev/getting-started.html) in your shell
 (`eval "$(mise activate bash)"`, or `zsh`); otherwise prefix each with `mise exec --`. If
 `mise install` asks you to trust the config on a fresh clone, run `mise trust` first.
+The VS Code Vitest extension runs the `node` it finds on its `PATH`: start VS Code from a shell where
+mise is activated, or set `vitest.nodeExecutable` in your user settings to the `node` shim in mise's
+shims directory (`~/.local/share/mise/shims/node` by default).
 
 ```bash
 mise install                             # Node from mise.toml

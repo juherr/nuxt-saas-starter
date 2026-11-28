@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 #
 # Signs in with email and password against $NUXT_APP_URL and checks that
-# better-auth answers 200 with a session cookie.
+# better-auth answers 200 with a session cookie. Transient answers are
+# retried as smoke-request.sh describes (SMOKE_RETRY_ATTEMPTS, default 1).
 #
 # Usage: smoke-sign-in.sh <label> <email> <password>
 #
@@ -10,6 +11,9 @@
 # <label>-cookies.txt in the current directory, so a later step can reuse
 # the session.
 set -euo pipefail
+
+# shellcheck source-path=SCRIPTDIR source=smoke-request.sh
+. "$(dirname "$0")/smoke-request.sh"
 
 if [ "$#" -ne 3 ]; then
   echo "usage: $0 <label> <email> <password>" >&2
@@ -23,35 +27,31 @@ password=$3
 body=$(jq -nc --arg email "$email" --arg password "$password" \
   '{email: $email, password: $password}')
 
-status=$(curl -sS --max-time 30 -o "$label-body.txt" -D "$label-headers.txt" \
-  -c "$label-cookies.txt" -w '%{http_code}' \
+# better-auth checks Origin against its base URL, so it must equal
+# NUXT_APP_URL.
+if ! smoke_request "$label" 200 "$label-body.txt" \
+  -D "$label-headers.txt" -c "$label-cookies.txt" \
   -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
-  -d "$body") || {
-  echo "::error::$label sign-in request failed"
-  exit 1
-}
-echo "$label status: $status"
-
-# On failure no session exists, so the headers and body hold nothing
-# secret and are printed as they are.
-show_response() {
+  -d "$body"; then
+  if [ "$SMOKE_STATUS" = 000 ]; then
+    echo "::error::$label sign-in request failed"
+    exit 1
+  fi
+  echo "::error::$label answered $SMOKE_STATUS instead of 200"
+  # Without a 200 no session exists, so the headers and body hold nothing
+  # secret and are printed as they are.
   echo "--- $label response headers ---"
   cat "$label-headers.txt"
   echo "--- $label response body ---"
   cat "$label-body.txt"
   echo
-}
-
-if [ "$status" != "200" ]; then
-  echo "::error::$label answered $status instead of 200"
-  show_response
   exit 1
 fi
-# Without HTTPS, better-auth names the cookie without the __Secure- prefix.
-if ! grep -qi '^set-cookie: better-auth\.session_token=' "$label-headers.txt"; then
+# Over HTTPS better-auth adds the __Secure- prefix to the cookie name.
+# A 200 carries a live session: never print its headers or body.
+if ! grep -Eqi '^set-cookie: (__Secure-)?better-auth\.session_token=' "$label-headers.txt"; then
   echo "::error::no better-auth session cookie in the $label response"
-  show_response
   exit 1
 fi

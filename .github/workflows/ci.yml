@@ -24,6 +24,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
       - run: pnpm lint --max-warnings=0
+      # mise comes from the setup action; the version is pinned here.
+      - name: shellcheck
+        run: mise x aqua:koalaman/shellcheck@0.11.0 -- shellcheck -x .github/scripts/*.sh
 
   # Every file needs licensing information: an SPDX header, or an entry
   # in REUSE.toml for files that cannot hold a comment.

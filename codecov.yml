@@ -1,8 +1,22 @@
 # SPDX-License-Identifier: MIT
 # Codecov settings (https://docs.codecov.com/docs/codecov-yaml).
-# Both statuses are informational: they report project and patch coverage
-# on pull requests without failing them. Thresholds come later, once the
-# baseline is reviewed.
+#
+# Policy:
+# - codecov/patch fails a pull request whose changed lines are less than
+#   80% covered: new code comes with its tests.
+# - codecov/project stays informational: the whole-project figure (49.5%
+#   of lines when this policy was set) mixes in the UI and e-mail
+#   templates and is not a gate.
+# - The auth, billing and org-access components each get their own status
+#   that fails when their coverage drops more than 1% below the base
+#   commit. The target is `auto` rather than a fixed percentage because
+#   the areas start far apart (lines hit/found when this policy was set:
+#   auth 78.6% 338/430, org-access 68.0% 102/150, billing 53.8% 490/911):
+#   one fixed figure would either fail billing today or let auth slide.
+#   Coverage can only ratchet up from here.
+#
+# Component paths: a plain path is a prefix, a string ending in `$` is a
+# regex (https://docs.codecov.com/docs/ignoring-paths).
 coverage:
   status:
     project:
@@ -10,7 +24,39 @@ coverage:
         informational: true
     patch:
       default:
-        informational: true
+        target: 80%
+        informational: false
+
+component_management:
+  individual_components:
+    - component_id: auth
+      name: auth
+      paths:
+        - ^server/utils/(auth|authAudit|authStorage|authSchemaFields|clientIp|requestClientIp)\.ts$
+        - server/middleware/
+        - server/api/auth/
+        - ^app/middleware/auth\.global\.ts$
+      statuses: &component-statuses
+        - type: project
+          target: auto
+          threshold: 1%
+          informational: false
+    - component_id: billing
+      name: billing
+      paths:
+        - ^server/utils/billing\.ts$
+        - ^server/utils/stripe[^/]*\.ts$
+        - ^server/utils/subscription-handlers\.ts$
+        - server/api/stripe/
+        - ^shared/utils/plans\.ts$
+      statuses: *component-statuses
+    - component_id: org-access
+      name: org-access
+      paths:
+        - server/api/organization/
+        - ^shared/utils/permissions\.ts$
+        - ^app/middleware/organization\.global\.ts$
+      statuses: *component-statuses
 
 comment:
   layout: 'header, diff, files'

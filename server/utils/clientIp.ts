@@ -5,7 +5,9 @@
  * read only when the deployment says who sets them.
  *
  * - `clientIpHeader`: one header the edge always overwrites (e.g.
- *   `cf-connecting-ip`, `x-real-ip`). Taken as is when it holds one valid IP.
+ *   `cf-connecting-ip`, `x-real-ip`). Taken as is when it holds one valid IP,
+ *   and, when `trustedProxies` is set, only from a socket address it lists:
+ *   a client reaching the port directly cannot choose its IP through it.
  * - `trustedProxies`: IPs or CIDR ranges of reverse proxies. The socket address
  *   is the rightmost hop; hops are walked right to left over
  *   `X-Forwarded-For` while they are trusted proxies, and the first other
@@ -159,19 +161,20 @@ export function parseClientIpConfig(raw: { trustedProxies?: unknown, clientIpHea
 
 /** The client IP of a request, or `undefined` when none can be trusted. */
 export function resolveClientIp(request: ClientIpRequest, config: ClientIpConfig): string | undefined {
-  if (config.clientIpHeader) {
+  const socket = normalizeIp(request.socketAddress)
+  const isTrusted = (ip: string) => {
+    const bytes = ipBytes(ip)
+    return !!bytes && config.trustedProxies.some(network => inNetwork(bytes, network))
+  }
+  const proxied = config.trustedProxies.length === 0 || (!!socket && isTrusted(socket))
+  if (config.clientIpHeader && proxied) {
     const fromEdge = normalizeIp(request.header(config.clientIpHeader))
     if (fromEdge) {
       return fromEdge
     }
   }
-  const socket = normalizeIp(request.socketAddress)
   if (!socket || config.trustedProxies.length === 0) {
     return socket
-  }
-  const isTrusted = (ip: string) => {
-    const bytes = ipBytes(ip)
-    return !!bytes && config.trustedProxies.some(network => inNetwork(bytes, network))
   }
   const forwarded = request.header('x-forwarded-for')?.split(',') ?? []
   let hop = socket

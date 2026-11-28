@@ -307,7 +307,7 @@ The audit log, Better Auth's rate limit and the IP of sessions record the client
 |---|---|
 | neither (default) | the socket address; `X-Forwarded-For` is ignored |
 | `NUXT_TRUSTED_PROXIES=127.0.0.1,::1,10.0.0.5` | when the socket address is one of these IPs or CIDR ranges, `X-Forwarded-For` is read from right to left, skipping the listed proxies; the first other address is the client |
-| `NUXT_CLIENT_IP_HEADER=x-real-ip` | that header, when it holds a single valid IP; otherwise as above |
+| `NUXT_CLIENT_IP_HEADER=x-real-ip` | that header, when it holds a single valid IP and, if `NUXT_TRUSTED_PROXIES` is set, the socket address is one of its proxies; otherwise as above |
 
 Behind a proxy with neither set, every request records the proxy's address: sign-in attempts of
 all clients then share one rate-limit counter. List every proxy hop between the client and the
@@ -316,9 +316,11 @@ first request. A proxy on the same host that connects over `localhost` may arriv
 which `127.0.0.1` does not cover: list both, or every client is recorded as `::1`. List only
 proxies: with `10.0.0.0/8`, a client inside that range has its own `X-Forwarded-For` read and
 chooses the IP recorded for it. Set
-`NUXT_CLIENT_IP_HEADER` only to a header your edge overwrites on every request, and keep the server
-unreachable except through it: a client that reaches the port directly can set that header to any
-value. The `cloudflare-module` build reads `cf-connecting-ip`, which Cloudflare sets on every
+`NUXT_CLIENT_IP_HEADER` only to a header your edge overwrites on every request. With
+`NUXT_TRUSTED_PROXIES` also set, the header is honoured only on connections from a listed proxy,
+so a client that reaches the port directly is recorded under its socket address. With the header
+alone, keep the server unreachable except through the edge: a client that reaches the port
+directly can set that header to any value. The `cloudflare-module` build reads `cf-connecting-ip`, which Cloudflare sets on every
 request to a Worker.
 
 ### Supported configurations

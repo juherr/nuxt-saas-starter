@@ -227,6 +227,33 @@ describe('resolving the client IP from an edge header', () => {
   })
 })
 
+describe('resolving the client IP from an edge header behind trusted proxies', () => {
+  const both = configOf(PROXY, 'x-real-ip')
+
+  it('ignores the edge header when the socket is not a trusted proxy', () => {
+    const headers = { 'x-real-ip': FORGED, 'x-forwarded-for': FORGED }
+
+    expect(resolveClientIp(request(SOCKET, headers), both)).toBe(SOCKET)
+  })
+
+  it('takes the edge header when the socket is a trusted proxy', () => {
+    const headers = { 'x-real-ip': '203.0.113.9', 'x-forwarded-for': FORGED }
+
+    expect(resolveClientIp(request(PROXY, headers), both)).toBe('203.0.113.9')
+  })
+
+  it('walks X-Forwarded-For from a trusted proxy when the edge header is malformed', () => {
+    const headers = { 'x-real-ip': 'unknown', 'x-forwarded-for': '203.0.113.9' }
+
+    expect(resolveClientIp(request(PROXY, headers), both)).toBe('203.0.113.9')
+  })
+
+  it('ignores the edge header when the socket address is unknown', () => {
+    // In-process sub-requests have no socket address and forward the outer headers.
+    expect(resolveClientIp(request(undefined, { 'x-real-ip': FORGED }), both)).toBeUndefined()
+  })
+})
+
 describe('handing the resolved IP to better-auth', () => {
   it('replaces a client-sent value with the resolved IP', () => {
     const headers = new Headers({ [RESOLVED_CLIENT_IP_HEADER]: FORGED, 'user-agent': 'ua' })

@@ -267,7 +267,8 @@ clients share one sign-in rate-limit counter, until you set one of:
 - `NUXT_TRUSTED_PROXIES`: comma-separated IPs or CIDR ranges of your proxies, and of nothing
   else (`127.0.0.1,::1` for a proxy on the same host, which may connect over IPv6);
   `X-Forwarded-For` is then read through them;
-- `NUXT_CLIENT_IP_HEADER`: one header your edge sets on every request (`x-real-ip`).
+- `NUXT_CLIENT_IP_HEADER`: one header your edge sets on every request (`x-real-ip`); with
+  `NUXT_TRUSTED_PROXIES` also set, it is honoured only on connections from a listed proxy.
 
 The `cloudflare-module` build reads `cf-connecting-ip` and needs no change. See
 [Client IP behind a proxy](docs/SELF_HOSTING_NODE.md#client-ip-behind-a-proxy).

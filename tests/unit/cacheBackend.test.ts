@@ -3,7 +3,7 @@ import type { Redis } from 'ioredis'
 import { randomUUID } from 'node:crypto'
 import { createStorage } from 'unstorage'
 import redisDriver from 'unstorage/drivers/redis'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createCacheClient } from '~~/server/utils/cacheBackend'
 import { createRedisClient } from '~~/server/utils/redis'
 
@@ -135,6 +135,29 @@ describe('createCacheClient with Redis', () => {
     await expect(client.getAndDelete('k')).rejects.toThrow(/not supported/)
     await expect(client.increment('k', 60)).rejects.toThrow(/not supported/)
     expect(redis.commands).toEqual([])
+  })
+})
+
+describe('createCacheClient backend log', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['Redis', recordingRedis, 'sessions: Redis (REDIS_URL at run time)'],
+    ['hub:kv', () => null, 'sessions: hub:kv']
+  ])('logs %s once per client, on first use', async (_name, redis, line) => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const first = createCacheClient({ kv: hubKvStub(), redis: async () => redis() })
+
+    expect(info).not.toHaveBeenCalled()
+    await Promise.all([first.get('a'), first.set('b', 'v', 1), first.delete('c')])
+    await first.get('d')
+    expect(info.mock.calls).toEqual([[line]])
+
+    const second = createCacheClient({ kv: hubKvStub(), redis: async () => redis() })
+    await second.get('a')
+    expect(info.mock.calls).toEqual([[line], [line]])
   })
 })
 

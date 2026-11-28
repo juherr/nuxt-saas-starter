@@ -96,7 +96,15 @@ export const createCacheClient = ({ kv, redis }: {
 }) => {
   let backend: Promise<Backend> | undefined
   const pick = () => {
-    backend ??= redis().then(client => client ? redisBackend(client) : kvBackend(kv))
+    backend ??= redis().then((client) => {
+      // Once per client: says which store holds the sessions of this run.
+      if (client) {
+        console.info('sessions: Redis (REDIS_URL at run time)')
+        return redisBackend(client)
+      }
+      console.info('sessions: hub:kv')
+      return kvBackend(kv)
+    })
     return backend
   }
   return {

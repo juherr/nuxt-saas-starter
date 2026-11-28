@@ -90,6 +90,7 @@ check_page() {
     "$NUXT_APP_URL/smoke-ssr-$variant/dashboard") \
     || status=000
   smoke_redact_headers "ssr-$variant-headers.txt"
+  smoke_redact_session_token "ssr-$variant-body.txt" "$jar"
   [ "$status" != 000 ] || fail "$variant page request failed"
   echo "$variant page status: $status"
   if [ "$status" != "200" ]; then
@@ -157,6 +158,7 @@ check_refused() {
     "$NUXT_APP_URL/smoke-ssr-refused/dashboard") \
     || status=000
   smoke_redact_headers "ssr-$variant-headers.txt"
+  smoke_redact_session_token "ssr-$variant-body.txt" "$jar"
   [ "$status" != 000 ] || fail "$variant page request failed or ran past 30 seconds"
   location=$(sed -n 's/^[Ll]ocation: *//p' "ssr-$variant-headers.txt" | tr -d '\r')
   echo "$variant page status: $status, location: $location"

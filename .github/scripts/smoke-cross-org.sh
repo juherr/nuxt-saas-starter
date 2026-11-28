@@ -72,6 +72,7 @@ status=$(curl -sS --max-time 30 -o cross-org-page-body.txt -D cross-org-page-hea
   "$NUXT_APP_URL/$slug/dashboard") \
   || status=000
 smoke_redact_headers cross-org-page-headers.txt
+smoke_redact_session_token cross-org-page-body.txt "$jar"
 [ "$status" != 000 ] || fail "the $slug page request failed or ran past 30 seconds"
 location=$(sed -n 's/^[Ll]ocation: *//p' cross-org-page-headers.txt | tr -d '\r')
 echo "$slug page status: $status, location: $location"
@@ -99,6 +100,7 @@ status=$(curl -sS --max-time 30 -o cross-org-api-body.txt -w '%{http_code}' \
   -H "Cookie: $cookie" \
   "$NUXT_APP_URL/api/organization/api-keys?organizationId=$org_id") \
   || fail "the api-keys request failed"
+smoke_redact_session_token cross-org-api-body.txt "$jar"
 echo "api-keys of $slug status: $status"
 [ "$status" = "403" ] || fail "api-keys of $slug answered $status instead of 403"
 # The error body echoes the request URL, which carries the id: drop it.

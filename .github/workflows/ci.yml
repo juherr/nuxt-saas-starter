@@ -239,6 +239,55 @@ jobs:
             sign-in-headers.txt
             sign-in-body.txt
 
+  # Builds with the cloudflare-module preset, as demo.yml does, and serves
+  # .output with `wrangler dev --local`: the KV binding is emulated on disk
+  # and Hyperdrive connects to the PostgreSQL service. No Cloudflare account
+  # or secret is used (deploy/ci/wrangler.ci.jsonc).
+  smoke-cloudflare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres: *postgres-service
+    env:
+      SMOKE_DATABASE_URL: postgres://smoke:smoke-password@localhost:5432/smoke
+      SMOKE_APP_URL: http://localhost:3000
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      # The preset merges the root wrangler.jsonc into
+      # .output/server/wrangler.json, so it must exist before the build.
+      - name: Use the CI wrangler config
+        run: cp deploy/ci/wrangler.ci.jsonc wrangler.jsonc
+      - *generate-migrations
+      - name: Build for Cloudflare Workers
+        run: pnpm build
+        env:
+          NUXT_NITRO_PRESET: cloudflare-module
+      - *apply-migrations
+      - name: Start wrangler dev
+        run: >-
+          pnpm exec wrangler dev --cwd .output --local --ip 127.0.0.1
+          --port 3000 --show-interactive-dev-session=false
+          > server.log 2>&1 &
+        env:
+          CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: ${{ env.SMOKE_DATABASE_URL }}
+      - *wait-health
+      - *seed-user
+      - *sign-in
+      # On Workers the sessions must stay on the KV binding (#159).
+      - name: Check the session is in the KV binding
+        run: .github/scripts/smoke-kv-cloudflare.sh sign-in
+      - name: Upload the server log and smoke responses
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smoke-cloudflare-server-log
+          path: |
+            server.log
+            sign-in-headers.txt
+            sign-in-body.txt
+
   # Builds and starts the Node server against throwaway PostgreSQL and Redis
   # services, then checks the health endpoint, an email sign-in and an
   # authenticated SSR page under /<org-slug>/ (organization switch,

@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: MIT
+// Wrangler config of the smoke-cloudflare CI job, copied by
+// .github/workflows/ci.yml to the repository root as wrangler.jsonc before
+// the build. It only runs under `wrangler dev --local`: the ids are dummies,
+// the KV namespace is emulated on disk, and the Hyperdrive binding connects
+// to the job's PostgreSQL through
+// CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE. No Cloudflare
+// account or secret is involved.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nuxt-saas-ci-smoke",
+  "main": "./.output/server/index.mjs",
+  "compatibility_date": "2025-12-10",
+  "assets": {
+    "directory": "./.output/public/",
+    "binding": "ASSETS"
+  },
+  // No R2 bucket: the smoke test uploads nothing.
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  // Throwaway values, matching SMOKE_APP_URL in ci.yml.
+  "vars": {
+    "NUXT_PUBLIC_BASE_URL": "http://localhost:3000",
+    "NUXT_BETTER_AUTH_SECRET": "ci-smoke-throwaway-secret-0123456789abcdef"
+  }
+}

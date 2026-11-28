@@ -11,8 +11,9 @@
 # database.
 #
 # Positive control: the organization's owner must get through
-# sync-customer-name, 200 with {"success": true}, or the 403 above would
-# prove nothing.
+# sync-customer-name, 200 with {"success": true}, and rename it through
+# better-auth (200, the new name answered and stored, then the original
+# name restored), or the refusals above would prove nothing.
 #
 # Usage: smoke-cross-org-write.sh <non-member label> <owner label> <org id>
 #
@@ -105,5 +106,27 @@ echo "owner sync-customer-name status: $status"
 [ "$status" = 200 ] || fail "the owner sync-customer-name answered $status instead of 200"
 jq -e '.success == true' cross-org-write-sync-owner.json >/dev/null \
   || fail "the owner sync-customer-name answered 200 without {\"success\": true}"
+
+# better-auth answers the updated organization row. The rename must reach
+# the database; the second update puts the original name back.
+org_name() {
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -v ON_ERROR_STOP=1 -qtA -c "SELECT name FROM organization WHERE id = '$org_id'"
+}
+owner_update() {
+  local body status
+  body=$(jq -nc --arg id "$org_id" --arg name "$2" '{organizationId: $id, data: {name: $name}}')
+  status=$(post "$1" "$owner_jar" /api/auth/organization/update "$body") \
+    || fail "the owner organization update request failed"
+  echo "owner organization update ($1) status: $status"
+  [ "$status" = 200 ] || fail "the owner organization update ($1) answered $status instead of 200"
+  jq -e --arg name "$2" '.name == $name' "cross-org-write-$1.json" >/dev/null \
+    || fail "the owner organization update ($1) did not answer the name $2"
+  [ "$(org_name)" = "$2" ] || fail "the owner organization update ($1) did not store the name $2"
+}
+original_name=$(org_name) || fail "the organization name query failed"
+[ -n "$original_name" ] || fail "organization $org_id has an empty name"
+owner_update owner-rename "$original_name (smoke)"
+owner_update owner-restore "$original_name"
 
 echo "A non-member could not write to organization $org_id"

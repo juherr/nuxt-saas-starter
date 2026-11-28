@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { DemoProtection, DemoRequest, DemoSession } from '~~/shared/utils/demoMode'
 import { describe, expect, it } from 'vitest'
-import { DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
+import { DEMO_GUARDED_PATHS, DEMO_PROTECTION, DEMO_SESSION_UNRESOLVED, demoBlockReason, demoNeedsSession, demoSessionTokenToResolve } from '~~/shared/utils/demoMode'
 
 const PROTECTED_USER = 'protected-user'
 const OTHER_USER = 'other-user'
@@ -385,6 +385,67 @@ describe('demoNeedsSession', () => {
     '/get-session'
   ])('does not need the session for %s', (path) => {
     expect(demoNeedsSession(path, {})).toBe(false)
+  })
+})
+
+describe('the demo path table', () => {
+  // Bodies that reach every rule of the table: each field a rule reads,
+  // alone and with the organization that turns the session lookup off.
+  const probeBodies: readonly Record<string, unknown>[] = [
+    {},
+    { email: 'demo@example.com' },
+    { image: 'x' },
+    { data: { logo: 'x' } },
+    { organizationId: SEEDED_ORG },
+    { organizationId: SEEDED_ORG, data: { logo: 'x' } },
+    { memberIdOrEmail: 'demo@example.com' },
+    { memberIdOrEmail: 'demo@example.com', organizationId: SEEDED_ORG },
+    { memberIdOrEmail: PROTECTED_MEMBER },
+    { memberId: PROTECTED_MEMBER },
+    { userId: PROTECTED_USER },
+    { sessionToken: 'token-1' }
+  ]
+  const sessions: readonly DemoRequest['session'][] = [
+    { userId: PROTECTED_USER, activeOrganizationId: SEEDED_ORG },
+    DEMO_SESSION_UNRESOLVED
+  ]
+  it('guards every path the policy knows', () => {
+    expect(DEMO_GUARDED_PATHS).toContain('/sign-up/email')
+    expect(DEMO_GUARDED_PATHS).toContain('/admin/revoke-user-session')
+    expect(DEMO_GUARDED_PATHS.length).toBeGreaterThan(20)
+  })
+
+  it('reaches every rule that reads the session with its probes', () => {
+    const decidedBySession = DEMO_GUARDED_PATHS.filter(path => probeBodies.some(body =>
+      sessions.some(session => blocked(path, body, session) !== blocked(path, body, null))))
+    expect(decidedBySession).toEqual(expect.arrayContaining([
+      '/change-password',
+      '/update-user',
+      '/organization/update',
+      '/organization/leave',
+      '/organization/remove-member'
+    ]))
+  })
+
+  // A rule that reads the session on a path that does not declare it is
+  // evaluated with `session: null` and lets the request through.
+  it.each(DEMO_GUARDED_PATHS)('declares a session requirement wherever the session decides %s', (path) => {
+    const undeclared = probeBodies.filter((body) => {
+      const withoutSession = blocked(path, body, null)
+      const decidedBySession = sessions.some(session => blocked(path, body, session) !== withoutSession)
+      return decidedBySession && !demoNeedsSession(path, body)
+    })
+    expect(undeclared).toEqual([])
+  })
+
+  it.each(DEMO_GUARDED_PATHS)('declares a token reader wherever the session owner decides %s', (path) => {
+    const undeclared = probeBodies.filter((body) => {
+      const owned = (sessionOwnerId: string | null) =>
+        demoBlockReason({ path, body, session: null, sessionOwnerId }, protection)
+      return owned(PROTECTED_USER) !== owned(null)
+        && demoSessionTokenToResolve(path, { ...body, sessionToken: 'token-1' }) !== 'token-1'
+    })
+    expect(undeclared).toEqual([])
   })
 })
 

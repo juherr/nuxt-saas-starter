@@ -539,6 +539,20 @@ jobs:
       # Not covered: secure cookies. better-auth adds Secure and the
       # __Secure- prefix only for an https baseURL (useSecureCookies,
       # dist/cookies/index.mjs), and http://localhost:3000 is http.
+      # The suite above signed in many times without NODE_ENV: an empty
+      # rate_limit table here proves the limiter was off, so the buckets
+      # smoke-rate-limit.sh finds below come from the production pass.
+      - name: Check the rate limiter stayed off without NODE_ENV
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          count=$(docker exec "$POSTGRES_CONTAINER" psql -U smoke -d smoke \
+            -v ON_ERROR_STOP=1 -tAc 'SELECT count(*) FROM rate_limit')
+          echo "rate_limit rows: $count"
+          if [ "$count" != "0" ]; then
+            echo "::error::rate_limit holds $count rows before the production pass: the limiter ran without NODE_ENV=production"
+            exit 1
+          fi
       - name: Restart the server with NODE_ENV=production
         run: |
           pid=$(cat server.pid)

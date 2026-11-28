@@ -157,9 +157,12 @@ jobs:
       # The build baked an empty databaseUrl and baseURL into .output, so
       # the server reads them from their runtime overrides: DATABASE_URL
       # alone leaves /api/health at 503 (docs/SELF_HOSTING_NODE.md).
+      # NODE_ENV is set here only, as in production: at job level `pnpm
+      # install` would skip the devDependencies the build needs.
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
         env:
+          NODE_ENV: production
           NUXT_DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
           NUXT_PUBLIC_BASE_URL: ${{ env.SMOKE_APP_URL }}
           NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
@@ -217,6 +220,7 @@ jobs:
       - name: Start the server with REDIS_URL
         run: node .output/server/index.mjs > server.log 2>&1 &
         env:
+          NODE_ENV: production
           NUXT_DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
           NUXT_PUBLIC_BASE_URL: ${{ env.SMOKE_APP_URL }}
           NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
@@ -336,8 +340,13 @@ jobs:
             process.exit(1)
           }
           EOF
+      # In production mode, as a deployment runs: better-auth turns its
+      # rate limiter on only when NODE_ENV is production at run time.
+      # Step level only, see smoke-build-without-db.
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
+        env:
+          NODE_ENV: production
       - name: Wait for /api/health
         run: .github/scripts/smoke-wait-health.sh
       - name: Reset the database to the demo seed
@@ -381,6 +390,14 @@ jobs:
         run: >-
           .github/scripts/smoke-cross-org.sh demo-sign-in globex-labs
           01934b00-0000-7000-8000-000000000102 'Globex Labs'
+      # After the last sign-in and SSR load, before any reset: demo:reset
+      # drops the rate_limit table with the rest of the schema.
+      - name: Check the rate limiter keyed the requests by client IP
+        run: .github/scripts/smoke-rate-limit.sh
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          POSTGRES_USER: smoke
+          POSTGRES_DB: smoke
       - name: Upload the server log and smoke responses
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -434,6 +451,10 @@ jobs:
         run: pnpm db:generate
       - name: Build (applies the migrations through NuxtHub)
         run: pnpm build
+      # Without NODE_ENV on purpose, unlike the smoke jobs: in production
+      # mode better-auth allows 3 requests per 10 s to each /sign-in path
+      # per client IP, and the suite signs in more often than that from
+      # one IP (auth.test.ts alone five times), so it would get 429s.
       - name: Start the server
         run: node .output/server/index.mjs > server.log 2>&1 &
       - name: Wait for /api/health

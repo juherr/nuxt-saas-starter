@@ -97,14 +97,44 @@ function ipBytes(value: string): Uint8Array | null {
   return bytes
 }
 
-/** The canonical form recorded for an IP, or `undefined` if not an IP. */
+/**
+ * IPv6 bytes in the RFC 5952 §4 text form: lowercase hex groups without
+ * leading zeros, the longest run of two or more zero groups (the leftmost on
+ * a tie) written `::`, a single zero group kept as `0`. Embedded IPv4 is
+ * written in hex too.
+ */
+function formatIpv6(bytes: Uint8Array): string {
+  const groups = Array.from({ length: 8 }, (_, i) => ((bytes[i * 2] ?? 0) << 8) | (bytes[i * 2 + 1] ?? 0))
+  let bestStart = -1
+  let bestLength = 1
+  for (let start = 0; start < 8; start++) {
+    let length = 0
+    while (start + length < 8 && groups[start + length] === 0) {
+      length++
+    }
+    if (length > bestLength) {
+      bestStart = start
+      bestLength = length
+    }
+  }
+  const hex = (part: number[]) => part.map(group => group.toString(16)).join(':')
+  if (bestStart < 0) {
+    return hex(groups)
+  }
+  return `${hex(groups.slice(0, bestStart))}::${hex(groups.slice(bestStart + bestLength))}`
+}
+
+/**
+ * The canonical form recorded for an IP, or `undefined` if not an IP: dotted
+ * IPv4 (IPv4-mapped IPv6 included), otherwise `formatIpv6`. Two spellings of
+ * one address give one string.
+ */
 function normalizeIp(value: string | undefined): string | undefined {
-  const trimmed = value?.trim() ?? ''
-  const bytes = ipBytes(trimmed)
+  const bytes = ipBytes(value?.trim() ?? '')
   if (!bytes) {
     return undefined
   }
-  return bytes.length === 4 ? bytes.join('.') : trimmed.toLowerCase()
+  return bytes.length === 4 ? bytes.join('.') : formatIpv6(bytes)
 }
 
 function parseNetwork(entry: string): Network | null {

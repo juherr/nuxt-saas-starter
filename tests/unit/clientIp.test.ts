@@ -102,9 +102,37 @@ describe('resolving the client IP with nothing configured', () => {
   })
 
   it('reads an embedded IPv4 only in the last group of an IPv6 address', () => {
-    expect(resolveClientIp(request('::1.2.3.4'), config)).toBe('::1.2.3.4')
+    expect(resolveClientIp(request('::1.2.3.4'), config)).toBe('::102:304')
     expect(resolveClientIp(request('::ffff:1.2.3.4'), config)).toBe('1.2.3.4')
-    expect(resolveClientIp(request('64:ff9b::1.2.3.4'), config)).toBe('64:ff9b::1.2.3.4')
+    expect(resolveClientIp(request('64:ff9b::1.2.3.4'), config)).toBe('64:ff9b::102:304')
+  })
+
+  it('records one form per IPv6 address, whatever its spelling', () => {
+    for (const spelling of ['2001:DB8:0:0:0:0:0:1', '2001:db8::1', '2001:0db8::0001', '2001:db8:0::0:1']) {
+      expect(resolveClientIp(request(spelling), config), spelling).toBe('2001:db8::1')
+    }
+  })
+
+  it('compresses the all-zero, loopback and trailing-zero addresses', () => {
+    expect(resolveClientIp(request('0:0:0:0:0:0:0:0'), config)).toBe('::')
+    expect(resolveClientIp(request('0:0:0:0:0:0:0:1'), config)).toBe('::1')
+    expect(resolveClientIp(request('1:0:0:0:0:0:0:0'), config)).toBe('1::')
+  })
+
+  it('compresses the leftmost of two equal zero runs', () => {
+    expect(resolveClientIp(request('2001:db8:0:0:1:0:0:1'), config)).toBe('2001:db8::1:0:0:1')
+  })
+
+  it('compresses the longest zero run, not the first one', () => {
+    expect(resolveClientIp(request('1:0:0:2:0:0:0:3'), config)).toBe('1:0:0:2::3')
+  })
+
+  it('leaves a single zero group uncompressed', () => {
+    expect(resolveClientIp(request('2001:db8::1:1:1:1:1'), config)).toBe('2001:db8:0:1:1:1:1:1')
+  })
+
+  it('writes a non-mapped embedded IPv4 in hex', () => {
+    expect(resolveClientIp(request('64:ff9b::192.0.2.1'), config)).toBe('64:ff9b::c000:201')
   })
 
   it('rejects an IPv4 placed before a trailing ::', () => {

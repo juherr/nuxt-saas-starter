@@ -10,9 +10,9 @@
 # organization's row, members and invitations must be unchanged in the
 # database.
 #
-# Positive control: the organization's owner must get past the guard of
-# sync-customer-name (any status but 403), or the 403 above would prove
-# nothing.
+# Positive control: the organization's owner must get through
+# sync-customer-name, 200 with {"success": true}, or the 403 above would
+# prove nothing.
 #
 # Usage: smoke-cross-org-write.sh <non-member label> <owner label> <org id>
 #
@@ -96,11 +96,14 @@ if [ "$after" != "$before" ]; then
   fail "organization $org_id changed after the non-member writes"
 fi
 
-# Stripe is not configured: the owner may get any answer once past the
-# guard, only a 403 would mean the guard refuses everyone.
+# The organization has no Stripe customer, so once past the guard the
+# route answers {"success": true} without calling Stripe: anything else
+# means the owner's legitimate call is broken.
 status=$(post sync-owner "$owner_jar" /api/stripe/sync-customer-name "$sync") \
   || fail "the owner sync-customer-name request failed"
 echo "owner sync-customer-name status: $status"
-[ "$status" != 403 ] || fail "the owner sync-customer-name answered 403: the guard refuses its owner too"
+[ "$status" = 200 ] || fail "the owner sync-customer-name answered $status instead of 200"
+jq -e '.success == true' cross-org-write-sync-owner.json >/dev/null \
+  || fail "the owner sync-customer-name answered 200 without {\"success\": true}"
 
 echo "A non-member could not write to organization $org_id"

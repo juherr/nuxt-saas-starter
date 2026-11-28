@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runtimeConfig = vi.hoisted(() => ({
   preset: 'node-server',
@@ -127,6 +127,10 @@ describe('the cacheClient backend', () => {
     getRedisClient.mockReset()
   })
 
+  afterEach(() => {
+    runtimeConfig.preset = 'node-server'
+  })
+
   it('uses the run-time Redis client on node-server', async () => {
     runtimeConfig.preset = 'node-server'
     const set = vi.fn(async () => 'OK')
@@ -163,6 +167,5 @@ describe('the cacheClient backend', () => {
 
     expect(getRedisClient).not.toHaveBeenCalled()
     expect(kvSetCalls).toEqual([{ key: 'session-token', value: 'v', options: { ttl: 60 } }])
-    runtimeConfig.preset = 'node-server'
   })
 })

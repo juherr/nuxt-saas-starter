@@ -7,6 +7,10 @@
 #
 # Usage: smoke-sign-in.sh <label> <email> <password>
 #
+# SMOKE_SIGN_IN_HEADER, when set, is one more request header in curl's
+# "Name: value" form, e.g. a client IP header to check how the server
+# resolves it.
+#
 # Writes <label>-headers.txt, <label>-body.txt and the cookie jar
 # <label>-cookies.txt in the current directory, so a later step can reuse
 # the session.
@@ -27,6 +31,11 @@ password=$3
 body=$(jq -nc --arg email "$email" --arg password "$password" \
   '{email: $email, password: $password}')
 
+extra_header=()
+if [ -n "${SMOKE_SIGN_IN_HEADER:-}" ]; then
+  extra_header=(-H "$SMOKE_SIGN_IN_HEADER")
+fi
+
 # better-auth checks Origin against its base URL, so it must equal
 # NUXT_APP_URL.
 if ! smoke_request "$label" 200 "$label-body.txt" \
@@ -34,6 +43,7 @@ if ! smoke_request "$label" 200 "$label-body.txt" \
   -X POST "$NUXT_APP_URL/api/auth/sign-in/email" \
   -H 'Content-Type: application/json' \
   -H "Origin: $NUXT_APP_URL" \
+  ${extra_header[@]+"${extra_header[@]}"} \
   -d "$body"; then
   if [ "$SMOKE_STATUS" = 000 ]; then
     echo "::error::$label sign-in request failed"

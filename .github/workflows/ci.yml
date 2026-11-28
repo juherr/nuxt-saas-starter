@@ -282,6 +282,21 @@ jobs:
       # On Workers the sessions must stay on the KV binding (#159).
       - name: Check the session is in the KV binding
         run: .github/scripts/smoke-kv-cloudflare.sh sign-in
+      # On Workers the client IP comes from CF-Connecting-IP (#185).
+      # wrangler dev keeps an incoming one and only fills it in from the
+      # socket when it is missing, so a documentation address
+      # (RFC 5737) that no socket gives reaches the app as sent.
+      - name: Sign in with a CF-Connecting-IP header
+        run: .github/scripts/smoke-sign-in.sh client-ip smoke-admin@example.com smoke-admin-password
+        env:
+          NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
+          SMOKE_SIGN_IN_HEADER: 'CF-Connecting-IP: 203.0.113.7'
+      - name: Check the audit log recorded that client IP
+        run: .github/scripts/smoke-client-ip.sh 203.0.113.7
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          POSTGRES_USER: smoke
+          POSTGRES_DB: smoke
       - name: Upload the server log and smoke responses
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -291,6 +306,8 @@ jobs:
             server.log
             sign-in-headers.txt
             sign-in-body.txt
+            client-ip-headers.txt
+            client-ip-body.txt
 
   # Builds and starts the Node server against throwaway PostgreSQL and Redis
   # services, then checks the health endpoint, an email sign-in and an

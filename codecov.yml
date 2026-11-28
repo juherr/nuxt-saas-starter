@@ -4,24 +4,54 @@
 # Policy:
 # - codecov/patch fails a pull request whose changed lines are less than
 #   80% covered: new code comes with its tests.
-# - codecov/project stays informational: the whole-project figure (49.5%
-#   of lines when this policy was set) mixes in the UI and e-mail
+# - codecov/project stays informational: the whole-project figure (44.8%
+#   on Codecov when this policy was set) mixes in the UI and e-mail
 #   templates and is not a gate.
 # - The auth, billing and org-access components each get their own status
-#   that fails when their coverage drops more than 1% below the base
-#   commit. The target is `auto` rather than a fixed percentage because
-#   the areas start far apart (lines hit/found when this policy was set:
-#   auth 78.6% 338/430, org-access 68.0% 102/150, billing 53.8% 490/911):
-#   one fixed figure would either fail billing today or let auth slide.
-#   Coverage can only ratchet up from here.
+#   (codecov/project/<component>) that fails when their coverage drops
+#   more than 1% below the base commit. Each pull request may still lower
+#   a component by up to 1%, so a series of them could erode it slowly.
+# - A fixed floor per area stops that erosion: codecov/project/<area>-floor
+#   fails below the area's coverage on Codecov when this policy was set,
+#   rounded down (auth 73.05%, org-access 61.58%, billing 45.70% on
+#   84ef056). The areas start too far apart for one figure. Raise a floor
+#   when its area's coverage has grown.
 #
-# Component paths: a plain path is a prefix, a string ending in `$` is a
-# regex (https://docs.codecov.com/docs/ignoring-paths).
+# The floors are named project statuses rather than a second status on
+# each component, whose name would clash with codecov/project/<component>.
+# Both read the same path lists (YAML anchors).
+#
+# Paths: a plain path is a prefix, a string ending in `$` is a regex
+# (https://docs.codecov.com/docs/ignoring-paths).
 coverage:
   status:
     project:
       default:
         informational: true
+      auth-floor:
+        target: 73%
+        informational: false
+        paths: &auth-paths
+          - ^server/utils/(auth|authAudit|authStorage|authSchemaFields|clientIp|requestClientIp)\.ts$
+          - server/middleware/
+          - server/api/auth/
+          - ^app/middleware/auth\.global\.ts$
+      billing-floor:
+        target: 45%
+        informational: false
+        paths: &billing-paths
+          - ^server/utils/billing\.ts$
+          - ^server/utils/stripe[^/]*\.ts$
+          - ^server/utils/subscription-handlers\.ts$
+          - server/api/stripe/
+          - ^shared/utils/plans\.ts$
+      org-access-floor:
+        target: 61%
+        informational: false
+        paths: &org-access-paths
+          - server/api/organization/
+          - ^shared/utils/permissions\.ts$
+          - ^app/middleware/organization\.global\.ts$
     patch:
       default:
         target: 80%
@@ -31,11 +61,7 @@ component_management:
   individual_components:
     - component_id: auth
       name: auth
-      paths:
-        - ^server/utils/(auth|authAudit|authStorage|authSchemaFields|clientIp|requestClientIp)\.ts$
-        - server/middleware/
-        - server/api/auth/
-        - ^app/middleware/auth\.global\.ts$
+      paths: *auth-paths
       statuses: &component-statuses
         - type: project
           target: auto
@@ -43,19 +69,11 @@ component_management:
           informational: false
     - component_id: billing
       name: billing
-      paths:
-        - ^server/utils/billing\.ts$
-        - ^server/utils/stripe[^/]*\.ts$
-        - ^server/utils/subscription-handlers\.ts$
-        - server/api/stripe/
-        - ^shared/utils/plans\.ts$
+      paths: *billing-paths
       statuses: *component-statuses
     - component_id: org-access
       name: org-access
-      paths:
-        - server/api/organization/
-        - ^shared/utils/permissions\.ts$
-        - ^app/middleware/organization\.global\.ts$
+      paths: *org-access-paths
       statuses: *component-statuses
 
 comment:

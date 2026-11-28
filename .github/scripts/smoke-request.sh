@@ -10,19 +10,49 @@
 # exceed the CPU budget, and the worker then answers 503 with the body
 # "error code: 1102".
 
+# smoke_redact_headers <headers file>
+#
+# Replaces the value of every Set-Cookie line of a file written by
+# `curl -D` with [redacted], in place, and keeps the cookie name and its
+# attributes: the smoke scripts still check which cookies were set, and CI
+# uploads these files as artifacts of a public repository on failure. A
+# missing file is left alone. The cookie jars (`curl -c`) keep the values,
+# since later requests need them; they are never uploaded.
+smoke_redact_headers() {
+  local file=$1 cr=$'\r'
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+  sed -E "s/^([Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]:[[:space:]]*[^=;[:space:]]+)=[^;$cr]*/\\1=[redacted]/" \
+    "$file" > "$file.redacted"
+  mv "$file.redacted" "$file"
+}
+
 # smoke_request <label> <expected status> <body file> <curl args...>
 #
 # Sets SMOKE_STATUS to the last status (000 when curl got no answer) and
 # returns 0 when it equals the expected one. Retries on 000, 503 or a body
 # holding "error code: 1102"; any other unexpected answer returns 1 at
 # once. Prints neither headers nor body: a response may carry a session.
+# A headers file given as `-D <file>` is passed through
+# smoke_redact_headers after every try.
 smoke_request() {
-  local label=$1 expected=$2 body=$3 attempt
+  local label=$1 expected=$2 body=$3 attempt arg headers=
   local attempts=${SMOKE_RETRY_ATTEMPTS:-1} delay=${SMOKE_RETRY_DELAY:-5}
   shift 3
+  local previous=
+  for arg in "$@"; do
+    if [ "$previous" = -D ]; then
+      headers=$arg
+    fi
+    previous=$arg
+  done
   for ((attempt = 1; attempt <= attempts; attempt++)); do
     SMOKE_STATUS=$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' "$@") \
       || SMOKE_STATUS=000
+    if [ -n "$headers" ]; then
+      smoke_redact_headers "$headers"
+    fi
     echo "$label: attempt $attempt/$attempts answered $SMOKE_STATUS"
     if [ "$SMOKE_STATUS" = "$expected" ]; then
       return 0

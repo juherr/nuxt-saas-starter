@@ -13,6 +13,9 @@
 # directory.
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=smoke-request.sh
+. "$(dirname "$0")/smoke-request.sh"
+
 if [ "$#" -ne 4 ]; then
   echo "usage: $0 <label> <org slug> <org id> <org name>" >&2
   exit 2
@@ -67,7 +70,9 @@ before=$(active_org) || fail "get-session request failed before the page"
 status=$(curl -sS --max-time 30 -o cross-org-page-body.txt -D cross-org-page-headers.txt \
   -w '%{http_code}' -H "Cookie: $cookie" -H "Referer: $NUXT_APP_URL/" \
   "$NUXT_APP_URL/$slug/dashboard") \
-  || fail "the $slug page request failed or ran past 30 seconds"
+  || status=000
+smoke_redact_headers cross-org-page-headers.txt
+[ "$status" != 000 ] || fail "the $slug page request failed or ran past 30 seconds"
 location=$(sed -n 's/^[Ll]ocation: *//p' cross-org-page-headers.txt | tr -d '\r')
 echo "$slug page status: $status, location: $location"
 case "$status" in

@@ -88,7 +88,9 @@ check_page() {
   status=$(curl -sS --max-time 30 -o "ssr-$variant-body.txt" -D "ssr-$variant-headers.txt" \
     -w '%{http_code}' -H "Cookie: $cookie" "$@" \
     "$NUXT_APP_URL/smoke-ssr-$variant/dashboard") \
-    || fail "$variant page request failed"
+    || status=000
+  smoke_redact_headers "ssr-$variant-headers.txt"
+  [ "$status" != 000 ] || fail "$variant page request failed"
   echo "$variant page status: $status"
   if [ "$status" != "200" ]; then
     grep -i '^location:' "ssr-$variant-headers.txt" || true
@@ -153,7 +155,9 @@ check_refused() {
   status=$(curl -sS --max-time 30 -o "ssr-$variant-body.txt" -D "ssr-$variant-headers.txt" \
     -w '%{http_code}' -H "Cookie: $token_cookie" -H 'Sec-Fetch-Site: cross-site' \
     "$NUXT_APP_URL/smoke-ssr-refused/dashboard") \
-    || fail "$variant page request failed or ran past 30 seconds"
+    || status=000
+  smoke_redact_headers "ssr-$variant-headers.txt"
+  [ "$status" != 000 ] || fail "$variant page request failed or ran past 30 seconds"
   location=$(sed -n 's/^[Ll]ocation: *//p' "ssr-$variant-headers.txt" | tr -d '\r')
   echo "$variant page status: $status, location: $location"
   [ "$status" = "302" ] || fail "$variant page answered $status instead of 302"

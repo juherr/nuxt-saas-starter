@@ -17,6 +17,9 @@
 # foreign-host.log in the current directory.
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR source=smoke-request.sh
+. "$(dirname "$0")/smoke-request.sh"
+
 if [ "$#" -ne 2 ]; then
   echo "usage: $0 <label> <user name>" >&2
   exit 2
@@ -56,7 +59,8 @@ for variant in referer typed foreign refused; do
     -d "{\"name\":\"$slug\",\"slug\":\"$slug\",\"keepCurrentActiveOrganization\":true}") \
     || fail "creating organization $slug failed"
   if [ "$status" != "200" ]; then
-    head -c 500 "ssr-org-$variant.json"; echo
+    # The request carries the session: print the error code, not the body.
+    smoke_error_code "creating organization $slug" "ssr-org-$variant.json"
     fail "creating organization $slug answered $status"
   fi
   org_ids[$variant]=$(jq -er .id "ssr-org-$variant.json") \

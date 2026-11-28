@@ -255,7 +255,7 @@ never touches it.
 `api_key_organization` stays in the Drizzle schema, deprecated and no longer read or written by the
 app, so that `pnpm db:generate` emits no `DROP TABLE` before the query has moved the keys. A later
 release removes it ([#162](https://github.com/juherr/nuxt-saas-starter/issues/162)): upgrade
-every deployment through this release first.
+every deployment through v0.2.0 first.
 
 ### Environment Variables
 

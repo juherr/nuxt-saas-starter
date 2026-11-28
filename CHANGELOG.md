@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-28
+
+Three changes need action before upgrading, each marked **Breaking** below: the move of API keys to
+their organization needs a maintenance window and makes this release a required step before the
+next ones ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145)), `create-admin.ts` needs
+`NUXT_ADMIN_EMAIL` and `NUXT_ADMIN_PASSWORD`
+([#133](https://github.com/juherr/nuxt-saas-starter/pull/133)), and S3 or R2 storage needs a valid
+public URL ([#141](https://github.com/juherr/nuxt-saas-starter/pull/141)). For contributors, mise
+replaces `.nvmrc` ([#140](https://github.com/juherr/nuxt-saas-starter/pull/140)).
+
 ### Added
 
 - Public demo mode, enabled with `NUXT_PUBLIC_DEMO_MODE=true`: the sign-in page shows the demo
@@ -28,10 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#114](https://github.com/juherr/nuxt-saas-starter/pull/114))
 - REUSE compliance: every source file carries an SPDX header, `REUSE.toml` covers the files that
   cannot, and a `reuse` CI job fails on a new file without one. The README explains how to license
-  a new file
+  a new file ([#118](https://github.com/juherr/nuxt-saas-starter/pull/118))
 - This changelog, following Keep a Changelog. Commit messages follow Conventional Commits, checked
   by a commitlint `commit-msg` hook and, on pull requests, on the title and the commits.
   `CONTRIBUTING.md` and a pull request template describe both
+  ([#118](https://github.com/juherr/nuxt-saas-starter/pull/118))
 - Deleting a user as an admin writes an audit log entry naming the admin, the removed user and the
   result, refused attempts included
   ([#139](https://github.com/juherr/nuxt-saas-starter/pull/139))
@@ -56,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([Upgrading from better-auth 1.4](README.md#upgrading-from-better-auth-14)).
   `api_key_organization` stays, deprecated, until
   [#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it, so upgrade every
-  deployment through this release. Deleting an organization deletes its keys through a database
+  deployment through v0.2.0. Deleting an organization deletes its keys through a database
   foreign key, and a key now survives the user who created it. Clients create a key with a
   top-level `organizationId` instead of `metadata.organizationId`
   ([#145](https://github.com/juherr/nuxt-saas-starter/pull/145))
@@ -65,7 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename the package to `nuxt-saas-starter`, declare it MIT in `package.json`, restore the NuxSaaS
   copyright notice in `LICENSE` next to every other holder, and point funding and repository links
   (`NUXT_APP_REPO` default, site navigation) to this project
+  ([#118](https://github.com/juherr/nuxt-saas-starter/pull/118))
 - GitHub Actions are pinned to commit SHAs, with their version in a comment that Dependabot updates
+  ([#118](https://github.com/juherr/nuxt-saas-starter/pull/118))
 - Package scripts, including dependencies' build scripts, run in pnpm's built-in shell
   (`shellEmulator`), so POSIX-style scripts behave the same on Windows
   ([#152](https://github.com/juherr/nuxt-saas-starter/pull/152))
@@ -102,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin table filters naming an inherited key such as `toString` are ignored
   ([#95](https://github.com/juherr/nuxt-saas-starter/pull/95))
 - Switching the home page screenshot tabs no longer flashes an empty panel
+  ([#118](https://github.com/juherr/nuxt-saas-starter/pull/118))
 - The members page role menu shows every role a member holds and adds or removes one role at a
   time instead of replacing the whole list; the last role cannot be removed
   ([#132](https://github.com/juherr/nuxt-saas-starter/pull/132))
@@ -315,7 +329,8 @@ as of 2025-12-14, itself built on NuxSaaS. Changes made before the fork are not 
   ([#76](https://github.com/juherr/nuxt-saas-starter/pull/76),
   [#78](https://github.com/juherr/nuxt-saas-starter/pull/78))
 
-[unreleased]: https://github.com/juherr/nuxt-saas-starter/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/juherr/nuxt-saas-starter/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/juherr/nuxt-saas-starter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/juherr/nuxt-saas-starter/releases/tag/v0.1.0
 [upstream-13]: https://github.com/HouseOfBetterAuth/nuxt-better-auth-saas/pull/13
 [upstream-14]: https://github.com/HouseOfBetterAuth/nuxt-better-auth-saas/pull/14

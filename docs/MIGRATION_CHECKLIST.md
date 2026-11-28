@@ -239,7 +239,7 @@ organization's id in `api_key.reference_id` (`references: 'organization'`), chec
 `apiKey` permission in that organization when a key is created. The deprecated
 `api_key_organization` table stays in the schema until
 [#162](https://github.com/juherr/nuxt-saas-starter/issues/162) removes it: upgrade every deployment
-through this release first.
+through v0.2.0 first.
 
 The move is automatic. After all migrations, `pnpm build` (with `DATABASE_URL`),
 `npx nuxt db migrate` and `pnpm dev` run

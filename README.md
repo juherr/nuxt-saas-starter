@@ -257,6 +257,22 @@ app, so that `pnpm db:generate` emits no `DROP TABLE` before the query has moved
 release removes it ([#162](https://github.com/juherr/nuxt-saas-starter/issues/162)): upgrade
 every deployment through v0.2.0 first.
 
+### Upgrading behind a reverse proxy
+
+The client IP of audit log entries, of Better Auth's rate limit and of sessions is the socket
+address unless the deployment says which proxy to trust: a client can no longer choose it through
+`X-Forwarded-For`. Behind a reverse proxy, every request records the proxy's address, and all
+clients share one sign-in rate-limit counter, until you set one of:
+
+- `NUXT_TRUSTED_PROXIES`: comma-separated IPs or CIDR ranges of your proxies, and of nothing
+  else (`127.0.0.1,::1` for a proxy on the same host, which may connect over IPv6);
+  `X-Forwarded-For` is then read through them;
+- `NUXT_CLIENT_IP_HEADER`: one header your edge sets on every request (`x-real-ip`); with
+  `NUXT_TRUSTED_PROXIES` also set, it is honoured only on connections from a listed proxy.
+
+The `cloudflare-module` build reads `cf-connecting-ip` and needs no change. See
+[Client IP behind a proxy](docs/SELF_HOSTING_NODE.md#client-ip-behind-a-proxy).
+
 ### Environment Variables
 
 **Important:** Set `NUXT_APP_URL` to your production URL for Better Auth to work correctly.

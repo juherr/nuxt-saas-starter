@@ -38,7 +38,9 @@ const BUILD_ENV = [
   'NUXT_LOG_LEVEL',
   'NUXT_LOG_FORMAT',
   'NUXT_PUBLIC_DEMO_MODE',
-  'NUXT_PUBLIC_APP_VERSION'
+  'NUXT_PUBLIC_APP_VERSION',
+  'NUXT_TRUSTED_PROXIES',
+  'NUXT_CLIENT_IP_HEADER'
 ]
 
 // Paths of the values that end up `undefined`. Nuxt serializes the runtime
@@ -166,5 +168,25 @@ describe('generateRuntimeConfig', () => {
     vi.stubEnv('NUXT_PUBLIC_DEMO_MODE', value)
 
     expect(generateRuntimeConfig().public.demoMode).toBe(false)
+  })
+  it('trusts no proxy and no client IP header by default on node-server', () => {
+    const config = generateRuntimeConfig('node-server')
+
+    expect(config.trustedProxies).toBe('')
+    expect(config.clientIpHeader).toBe('')
+  })
+
+  it('reads the client IP header set by Cloudflare on the cloudflare-module preset', () => {
+    expect(generateRuntimeConfig('cloudflare-module').clientIpHeader).toBe('cf-connecting-ip')
+  })
+
+  it('reads the client IP settings at build time', () => {
+    vi.stubEnv('NUXT_TRUSTED_PROXIES', '10.0.0.0/8')
+    vi.stubEnv('NUXT_CLIENT_IP_HEADER', 'x-real-ip')
+
+    const config = generateRuntimeConfig('cloudflare-module')
+
+    expect(config.trustedProxies).toBe('10.0.0.0/8')
+    expect(config.clientIpHeader).toBe('x-real-ip')
   })
 })

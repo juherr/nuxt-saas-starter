@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Breaking:** forwarded client IPs are trusted only from configured proxies. The audit log, Better
+  Auth's rate limit and session IPs, and file audit entries record the socket address unless
+  `NUXT_TRUSTED_PROXIES` (proxy IPs or CIDR ranges, read through `X-Forwarded-For` from the right)
+  or `NUXT_CLIENT_IP_HEADER` (one header the edge sets, honoured only from a listed proxy when
+  `NUXT_TRUSTED_PROXIES` is set) is set; a client could choose the IP these
+  recorded through `X-Forwarded-For`. Behind a proxy, set one of them, or every request records
+  the proxy's address and all clients share one sign-in rate-limit counter. The `cloudflare-module`
+  build reads `cf-connecting-ip` by default
+  ([#24](https://github.com/juherr/nuxt-saas-starter/issues/24))
+
 ## [0.2.0] - 2026-11-28
 
 Three changes need action before upgrading, each marked **Breaking** below: the move of API keys to

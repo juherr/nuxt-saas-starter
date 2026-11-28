@@ -3,13 +3,13 @@ import type { RateLimitStore } from '~~/server/services/file/rateLimiter'
 import type { FileManagerConfig } from '~~/server/services/file/types'
 import { Buffer } from 'node:buffer'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRoute, stubNitroGlobals, stubRequestContext } from './support/nitroGlobals'
+import { callRoute, stubNitroGlobals, stubRequestContext, TEST_AGENT, TEST_IP } from './support/nitroGlobals'
 
 const readMultipartFormData = vi.hoisted(() => vi.fn())
 const uploadFile = vi.hoisted(() => vi.fn())
 const requireAuth = vi.hoisted(() => vi.fn())
 const fileConfig = vi.hoisted(() => ({ value: {} as Partial<FileManagerConfig> }))
-const runtimeConfig = vi.hoisted(() => ({ public: { demoMode: false } }))
+const runtimeConfig = vi.hoisted(() => ({ trustedProxies: '', clientIpHeader: '', public: { demoMode: false } }))
 const store = vi.hoisted(() => ({
   reserve: vi.fn<RateLimitStore['reserve']>(),
   read: vi.fn<RateLimitStore['read']>()
@@ -61,6 +61,7 @@ describe('the upload endpoint', () => {
     uploadFile.mockReset().mockResolvedValue({ id: 'f1' })
     store.reserve.mockReset().mockResolvedValue({ allowed: true, currentCount: 1 })
     runtimeConfig.public.demoMode = false
+    runtimeConfig.trustedProxies = ''
   })
 
   it('refuses an anonymous request before reading the body', async () => {
@@ -89,6 +90,28 @@ describe('the upload endpoint', () => {
   it('stores a valid image', async () => {
     await expect(upload()).resolves.toMatchObject({ success: true })
     expect(uploadFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a forged X-Forwarded-For when no proxy is trusted', async () => {
+    await upload({ ...MULTIPART, 'content-length': '2000', 'x-forwarded-for': '6.6.6.6' })
+
+    expect(uploadFile).toHaveBeenCalledWith(PNG, 'avatar.png', expect.objectContaining({ mimeType: 'image/png' }), 'u1', TEST_IP, TEST_AGENT)
+  })
+
+  it('records the client behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = TEST_IP
+
+    await upload({ ...MULTIPART, 'content-length': '2000', 'x-forwarded-for': '198.51.100.7' })
+
+    expect(uploadFile).toHaveBeenCalledWith(PNG, 'avatar.png', expect.objectContaining({ mimeType: 'image/png' }), 'u1', '198.51.100.7', TEST_AGENT)
+  })
+
+  it('skips a forged leftmost X-Forwarded-For entry behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = TEST_IP
+
+    await upload({ ...MULTIPART, 'content-length': '2000', 'x-forwarded-for': '6.6.6.6, 198.51.100.7' })
+
+    expect(uploadFile).toHaveBeenCalledWith(PNG, 'avatar.png', expect.objectContaining({ mimeType: 'image/png' }), 'u1', '198.51.100.7', TEST_AGENT)
   })
 
   describe('before buffering the body', () => {

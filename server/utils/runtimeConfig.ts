@@ -55,6 +55,12 @@ export const generateRuntimeConfig = (preset = 'node-server', { appVersion = '' 
   // Access logs: `''` means `info` / `text` (see server/utils/accessLog.ts)
   logLevel: process.env.NUXT_LOG_LEVEL || '', // debug, info, warn or error
   logFormat: process.env.NUXT_LOG_FORMAT || '', // text or json
+  // Client IP (server/utils/clientIp.ts): comma-separated reverse proxy IPs
+  // or CIDR ranges, and one header the edge sets on every request. Unset:
+  // the socket address, X-Forwarded-For ignored. Cloudflare sets
+  // cf-connecting-ip on every request to a Worker.
+  trustedProxies: process.env.NUXT_TRUSTED_PROXIES || '',
+  clientIpHeader: process.env.NUXT_CLIENT_IP_HEADER || (preset.startsWith('cloudflare') ? 'cf-connecting-ip' : ''),
   // File
   fileManager: {
     storage: {

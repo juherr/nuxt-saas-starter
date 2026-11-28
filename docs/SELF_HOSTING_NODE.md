@@ -87,6 +87,7 @@ including the Redis URL, into the build output:
 
 | Build environment | `hub:kv` driver |
 |-------------------|-----------------|
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN`, or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, set (checked first) | Upstash, over its REST API |
 | `REDIS_URL` set (or `KV_URL` starting with `rediss://`) | Redis, through `ioredis` |
 | `NUXT_NITRO_PRESET=cloudflare-module` | Cloudflare KV binding `KV` (sessions always go there: `cacheClient` never loads `ioredis` on Cloudflare) |
 | none of the above | `fs-lite`, files under `.data/kv` |
@@ -95,6 +96,11 @@ Building with `REDIS_URL` still bakes Redis into `hub:kv`. That is harmless: `ca
 the same keys, values and TTLs as that driver (unstorage's `redis` driver, no key prefix), so the
 sessions of a deployment built with `REDIS_URL` survive the upgrade, and such a build started
 without `REDIS_URL` keeps using the Redis it was built with.
+
+A build with an Upstash REST configuration keeps its sessions in Upstash only while `REDIS_URL` is
+unset at run time. Setting `REDIS_URL` when the server starts, for instance for the upload rate
+limiter ([Upload rate limit](#upload-rate-limit)), moves the sessions to that Redis and logs every
+user out, unless that Redis already holds them.
 
 With the `fs-lite` driver, `.data/kv` is resolved from the **working directory of the
 server process**. It holds the sessions: keep it writable and persistent (a volume, in a

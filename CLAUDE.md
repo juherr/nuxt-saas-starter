@@ -19,9 +19,10 @@
   `docs/SELF_HOSTING_NODE.md`) or `cloudflare-module` (`pnpm preview:cf`, `pnpm run deploy`,
   `wrangler.example.jsonc`). `.env.example` sets `cloudflare-module`; unset, the build is `node-server`;
   `pnpm dev` always runs `node-server` unless `NUXT_FORCE_CLOUDFLARE_DEV` is set.
-- Sessions (`cacheClient`, `server/utils/cacheBackend.ts`) go to Redis when `REDIS_URL` is set at **run**
+- Sessions (`cacheClient`, exported by `server/utils/drivers.ts`, built by `createCacheClient` in
+  `server/utils/cacheBackend.ts`) go to Redis when `REDIS_URL` is set at **run**
   time on node-server, else to `hub:kv`, whose driver is baked in at **build**: Redis when `REDIS_URL` is
-  set, the `KV` binding on Cloudflare, else `fs-lite` under `.data/kv`. Both write the same Redis keys.
+  set (Upstash first when its REST variables are), the `KV` binding on Cloudflare, else `fs-lite` under `.data/kv`. Both write the same Redis keys.
   `NUXT_REDIS_URL` is read by nothing (#169). The upload rate limiter reads `REDIS_URL` at run time too.
 - `node create-admin.ts` creates an admin from `NUXT_ADMIN_EMAIL` / `NUXT_ADMIN_PASSWORD` (needs
   `DATABASE_URL`; the CI smoke job uses it). It builds its own better-auth instance, so the app's

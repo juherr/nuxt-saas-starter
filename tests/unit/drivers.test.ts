@@ -24,6 +24,9 @@ vi.mock('pg', () => ({
 
 vi.mock('~~/server/utils/runtimeConfig', () => ({ runtimeConfig }))
 
+const getRedisClient = vi.hoisted(() => vi.fn())
+vi.mock('~~/server/utils/redis', () => ({ getRedisClient }))
+
 describe('the PostgreSQL pool', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -115,5 +118,51 @@ describe('isDatabaseConfigured', () => {
     const { isDatabaseConfigured } = await import('~~/server/utils/drivers')
 
     expect(isDatabaseConfigured()).toBe(true)
+  })
+})
+
+describe('the cacheClient backend', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    getRedisClient.mockReset()
+  })
+
+  it('uses the run-time Redis client on node-server', async () => {
+    runtimeConfig.preset = 'node-server'
+    const set = vi.fn(async () => 'OK')
+    getRedisClient.mockResolvedValue({ set })
+
+    const { cacheClient } = await import('~~/server/utils/drivers')
+    // Same module as the aliased `hub:kv`, loaded after resetModules.
+    const { kvSetCalls } = await import('./stubs/hub-kv')
+    await cacheClient.set('session-token', 'v', 60)
+
+    expect(set).toHaveBeenCalledWith('session-token', 'v', 'EX', 60)
+    expect(kvSetCalls).toEqual([])
+  })
+
+  it('falls back to hub:kv on node-server without a Redis URL', async () => {
+    runtimeConfig.preset = 'node-server'
+    getRedisClient.mockResolvedValue(null)
+
+    const { cacheClient } = await import('~~/server/utils/drivers')
+    // Same module as the aliased `hub:kv`, loaded after resetModules.
+    const { kvSetCalls } = await import('./stubs/hub-kv')
+    await cacheClient.set('session-token', 'v', 60)
+
+    expect(kvSetCalls).toEqual([{ key: 'session-token', value: 'v', options: { ttl: 60 } }])
+  })
+
+  it('never loads the Redis client on Cloudflare', async () => {
+    runtimeConfig.preset = 'cloudflare-module'
+
+    const { cacheClient } = await import('~~/server/utils/drivers')
+    // Same module as the aliased `hub:kv`, loaded after resetModules.
+    const { kvSetCalls } = await import('./stubs/hub-kv')
+    await cacheClient.set('session-token', 'v', 60)
+
+    expect(getRedisClient).not.toHaveBeenCalled()
+    expect(kvSetCalls).toEqual([{ key: 'session-token', value: 'v', options: { ttl: 60 } }])
+    runtimeConfig.preset = 'node-server'
   })
 })

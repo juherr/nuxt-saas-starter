@@ -2,8 +2,9 @@
 import type { BetterAuthOptions } from 'better-auth'
 import { cacheClient } from './drivers'
 
-// Sessions stay in hub:kv, but whatever needs an atomic consume or counter
-// stays in PostgreSQL, since cacheClient refuses getAndDelete and increment:
+// Sessions go to cacheClient (Redis or hub:kv), but whatever needs an atomic
+// consume or counter stays in PostgreSQL, since cacheClient refuses
+// getAndDelete and increment:
 // - verification.storeInDatabase: single-use tokens are consumed with a
 //   DELETE ... RETURNING instead of secondaryStorage.getAndDelete;
 // - rateLimit.storage 'database': a conditional UPDATE on the rateLimit

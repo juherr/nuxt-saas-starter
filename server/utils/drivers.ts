@@ -3,7 +3,9 @@ import type { Hyperdrive } from '@cloudflare/workers-types'
 import { kv } from 'hub:kv'
 import pg from 'pg'
 import { Resend } from 'resend'
+import { createCacheClient } from './cacheBackend'
 import { databaseConnectTimeoutMs } from './databaseConnectTimeout'
+import { getRedisClient } from './redis'
 import { runtimeConfig } from './runtimeConfig'
 
 const getDatabaseUrl = () => {
@@ -43,38 +45,14 @@ export const getPgPool = () => {
 }
 
 // Cache Client
-const unsupported = (method: string) => new Error(
-  `cacheClient.${method} is not supported: hub:kv cannot run it atomically `
-  + 'on every driver. Keep its caller on the database (see authStorage.ts).'
-)
-
-// better-auth secondary storage. better-auth 1.7 types getAndDelete and
-// increment as required, but hub:kv only offers them atomically on Redis
-// and Upstash, not on Cloudflare KV or fs-lite. A read-then-write version
-// would let a single-use token be consumed twice and a rate limit be
-// undercounted, so both throw and authStorageOptions keeps their callers
-// (verification consume, rate limit) on the database.
-export const cacheClient = {
-  get: async (key: string) => {
-    const value = await kv.get(key)
-    if (value == null) {
-      return null
-    }
-    return typeof value === 'string' ? value : JSON.stringify(value)
-  },
-  set: async (key: string, value: string, ttl: number | undefined) => {
-    await kv.set(key, value, ttl ? { ttl } : undefined)
-  },
-  delete: async (key: string) => {
-    await kv.del(key)
-  },
-  getAndDelete: async (_key: string): Promise<string | null> => {
-    throw unsupported('getAndDelete')
-  },
-  increment: async (_key: string, _ttl: number): Promise<number> => {
-    throw unsupported('increment')
-  }
-}
+// better-auth secondary storage (sessions). On node-server it uses Redis
+// when the run environment carries a Redis URL (resolveRedisUrl), whatever
+// hub:kv was built with; otherwise hub:kv (fs-lite, or the KV binding on
+// Cloudflare, where ioredis is never loaded). See cacheBackend.ts.
+export const cacheClient = createCacheClient({
+  kv,
+  redis: async () => runtimeConfig.preset === 'node-server' ? getRedisClient() : null
+})
 
 let resendClient: Resend | undefined
 

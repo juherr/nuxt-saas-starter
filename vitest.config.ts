@@ -37,7 +37,11 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['tests/unit/**/*.test.ts']
+          include: ['tests/unit/**/*.test.ts'],
+          // Above Vitest's 5 s / 10 s defaults so a loaded machine (parallel
+          // runs, CI) does not time out tests that pass when rerun alone.
+          testTimeout: 15000,
+          hookTimeout: 15000
         }
       },
       await defineVitestProject({
@@ -46,6 +50,8 @@ export default defineConfig({
           include: ['tests/components/**/*.test.ts'],
           environment: 'nuxt',
           testTimeout: 30000,
+          // Hooks mount the Nuxt app too: keep them on the test budget.
+          hookTimeout: 30000,
           environmentOptions: {
             nuxt: {
               domEnvironment: 'happy-dom'
@@ -60,6 +66,7 @@ export default defineConfig({
           environment: 'node',
           include: ['tests/e2e/**/*.test.ts'],
           testTimeout: 30000,
+          hookTimeout: 30000,
           setupFiles: ['./tests/setup.ts', './tests/e2e/setup.ts']
         }
       }

@@ -22,8 +22,17 @@ export default defineConfig({
         'emails/**/*.{ts,tsx}',
         'create-admin.ts'
       ],
-      exclude: ['**/*.d.ts'],
-      reporter: ['html'],
+      // Generated or vendored code: build outputs, drizzle-kit migrations and
+      // the better-auth schema that `pnpm auth:schema` regenerates.
+      exclude: [
+        '**/*.d.ts',
+        '**/.nuxt/**',
+        '**/.output/**',
+        'server/db/migrations/**',
+        'server/db/schema/auth.ts'
+      ],
+      // html to browse locally, lcov for Codecov, text-summary for the log.
+      reporter: ['html', 'lcov', 'text-summary'],
       reportsDirectory: 'tests/coverage'
     },
     projects: [

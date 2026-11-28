@@ -166,6 +166,13 @@ pnpm build
 npx wrangler dev --cwd .output
 ```
 
+The CI job `smoke-cloudflare` runs this preview without a Cloudflare account:
+`deploy/ci/wrangler.ci.jsonc`, copied to `wrangler.jsonc` before the build, holds
+dummy KV and Hyperdrive ids, and `wrangler dev --local` emulates the KV namespace
+on disk while `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` points the
+Hyperdrive binding at a local PostgreSQL. The job then checks `/api/health`, an
+email sign-in, and that the session landed in the KV binding.
+
 ---
 
 ## How It Works

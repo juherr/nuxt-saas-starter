@@ -187,9 +187,9 @@ Hyperdrive provides connection pooling for PostgreSQL on Cloudflare Workers, whi
 | Environment | Cache Backend |
 |-------------|---------------|
 | Cloudflare Workers | KV Namespace |
-| Node.js hosting | NuxtHub KV driver chosen at build: Redis when `REDIS_URL` is set, otherwise files under `.data/kv` |
+| Node.js hosting | Redis when `REDIS_URL` is set at run time, otherwise NuxtHub KV with the driver chosen at build (Redis when `REDIS_URL` was set, else files under `.data/kv`) |
 
-The `cacheClient` in `server/utils/drivers.ts` goes through NuxtHub KV (`hub:kv`) in both cases. See [SELF_HOSTING_NODE.md](SELF_HOSTING_NODE.md#2-sessions-and-kv).
+The `cacheClient` in `server/utils/drivers.ts` goes through NuxtHub KV (`hub:kv`) on Cloudflare, and on Node.js unless `REDIS_URL` is set when the server starts. See [SELF_HOSTING_NODE.md](SELF_HOSTING_NODE.md#2-sessions-and-kv).
 
 ### File Storage
 

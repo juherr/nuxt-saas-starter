@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pnpm coverage` now runs the same projects instead of the e2e suite too
   ([#66](https://github.com/juherr/nuxt-saas-starter/issues/66))
 
+### Changed
+
+- With the `node-server` preset, sessions go to Redis when `REDIS_URL` (or a `rediss://`
+  `KV_URL`) is set when the server starts, even in a build made without it, so one artifact can
+  run with or without Redis. Without it they stay in NuxtHub KV, whose driver is still chosen at
+  build. Redis keys are unchanged: a deployment built with `REDIS_URL` keeps its sessions.
+  Session reads and writes now go through the app's own Redis client, whose commands time out
+  after 2 s with a single retry, so they fail faster during a Redis outage than with NuxtHub's
+  default options. A build with an Upstash REST configuration (`KV_REST_API_*` or
+  `UPSTASH_REDIS_REST_*`) that also gets `REDIS_URL` at run time, for the upload rate limiter,
+  now keeps its sessions in that Redis instead of Upstash, which logs users out unless that
+  Redis already holds them.
+  `NUXT_REDIS_URL` is still not read ([#169](https://github.com/juherr/nuxt-saas-starter/issues/169))
+  ([#159](https://github.com/juherr/nuxt-saas-starter/issues/159))
+
 ### Security
 
 - **Breaking:** forwarded client IPs are trusted only from configured proxies. The audit log, Better

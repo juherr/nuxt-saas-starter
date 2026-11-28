@@ -138,18 +138,22 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
       # Built before the migrations exist, as from a fresh clone.
-      - name: Build without a database
-        run: pnpm build
-        env:
-          NUXT_NITRO_PRESET: node-server
-      - name: Generate migrations
-        run: pnpm db:generate
+      # Anchored steps (&...) are reused by smoke-redis-at-runtime.
+      - &build-without-db
+          name: Build without a database
+          run: pnpm build
+          env:
+            NUXT_NITRO_PRESET: node-server
+      - &generate-migrations
+          name: Generate migrations
+          run: pnpm db:generate
       # Runs `nuxt prepare` in the checkout and applies the generated
       # server/db/migrations, so it needs the sources, not .output.
-      - name: Apply the migrations with nuxt db migrate
-        run: pnpm exec nuxt db migrate
-        env:
-          DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+      - &apply-migrations
+          name: Apply the migrations with nuxt db migrate
+          run: pnpm exec nuxt db migrate
+          env:
+            DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
       # The build baked an empty databaseUrl and baseURL into .output, so
       # the server reads them from their runtime overrides: DATABASE_URL
       # alone leaves /api/health at 503 (docs/SELF_HOSTING_NODE.md).
@@ -160,20 +164,23 @@ jobs:
           NUXT_PUBLIC_BASE_URL: ${{ env.SMOKE_APP_URL }}
           NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
           PORT: 3000
-      - name: Wait for /api/health
-        run: .github/scripts/smoke-wait-health.sh
-        env:
-          NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
-      - name: Seed a user
-        run: node create-admin.ts
-        env:
-          DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
-          NUXT_ADMIN_EMAIL: smoke-admin@example.com
-          NUXT_ADMIN_PASSWORD: smoke-admin-password
-      - name: Sign in with email and password
-        run: .github/scripts/smoke-sign-in.sh sign-in smoke-admin@example.com smoke-admin-password
-        env:
-          NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
+      - &wait-health
+          name: Wait for /api/health
+          run: .github/scripts/smoke-wait-health.sh
+          env:
+            NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
+      - &seed-user
+          name: Seed a user
+          run: node create-admin.ts
+          env:
+            DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+            NUXT_ADMIN_EMAIL: smoke-admin@example.com
+            NUXT_ADMIN_PASSWORD: smoke-admin-password
+      - &sign-in
+          name: Sign in with email and password
+          run: .github/scripts/smoke-sign-in.sh sign-in smoke-admin@example.com smoke-admin-password
+          env:
+            NUXT_APP_URL: ${{ env.SMOKE_APP_URL }}
       # The cookie jar is left out: it holds a session only after a
       # successful sign-in, and the headers already show the cookie.
       - name: Upload the server log and smoke responses
@@ -181,6 +188,52 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-build-without-db-server-log
+          path: |
+            server.log
+            sign-in-headers.txt
+            sign-in-body.txt
+
+  # The same build, without REDIS_URL, started with REDIS_URL set only at
+  # run time: the sessions must land in Redis, not in the fs-lite KV
+  # directory hub:kv was built with (#159).
+  smoke-redis-at-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres: *postgres-service
+      redis: *redis-service
+    # As in smoke-build-without-db, REDIS_URL is not set at job level: the
+    # build would read it.
+    env:
+      SMOKE_DATABASE_URL: postgres://smoke:smoke-password@localhost:5432/smoke
+      SMOKE_REDIS_URL: redis://localhost:6379
+      SMOKE_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/setup
+      - *build-without-db
+      - *generate-migrations
+      - *apply-migrations
+      - name: Start the server with REDIS_URL
+        run: node .output/server/index.mjs > server.log 2>&1 &
+        env:
+          NUXT_DATABASE_URL: ${{ env.SMOKE_DATABASE_URL }}
+          NUXT_PUBLIC_BASE_URL: ${{ env.SMOKE_APP_URL }}
+          NUXT_BETTER_AUTH_SECRET: ci-smoke-throwaway-secret-0123456789abcdef
+          REDIS_URL: ${{ env.SMOKE_REDIS_URL }}
+          PORT: 3000
+      - *wait-health
+      - *seed-user
+      - *sign-in
+      - name: Check the session is in Redis, not in .data/kv
+        run: .github/scripts/smoke-kv-session.sh sign-in
+        env:
+          REDIS_CLI: docker exec ${{ job.services.redis.id }} redis-cli
+      - name: Upload the server log and smoke responses
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smoke-redis-at-runtime-server-log
           path: |
             server.log
             sign-in-headers.txt

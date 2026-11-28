@@ -19,8 +19,11 @@
   `docs/SELF_HOSTING_NODE.md`) or `cloudflare-module` (`pnpm preview:cf`, `pnpm run deploy`,
   `wrangler.example.jsonc`). `.env.example` sets `cloudflare-module`; unset, the build is `node-server`;
   `pnpm dev` always runs `node-server` unless `NUXT_FORCE_CLOUDFLARE_DEV` is set.
-- KV (sessions) driver is baked in at **build** time: Redis when `REDIS_URL` is set, the `KV` binding on
-  Cloudflare, else `fs-lite` under `.data/kv`; `NUXT_REDIS_URL` is read by nothing. The upload rate limiter reads `REDIS_URL` at run time.
+- Sessions (`cacheClient`, exported by `server/utils/drivers.ts`, built by `createCacheClient` in
+  `server/utils/cacheBackend.ts`) go to Redis when `REDIS_URL` is set at **run**
+  time on node-server, else to `hub:kv`, whose driver is baked in at **build**: Redis when `REDIS_URL` is
+  set (Upstash first when its REST variables are), the `KV` binding on Cloudflare, else `fs-lite` under `.data/kv`. Both write the same Redis keys.
+  `NUXT_REDIS_URL` is read by nothing (#169). The upload rate limiter reads `REDIS_URL` at run time too.
 - `node create-admin.ts` creates an admin from `NUXT_ADMIN_EMAIL` / `NUXT_ADMIN_PASSWORD` (needs
   `DATABASE_URL`; the CI smoke job uses it). It builds its own better-auth instance, so the app's
   `databaseHooks` do not run: probe a hook through `POST /api/auth/sign-up/email`.
@@ -43,7 +46,9 @@
   `any`, `as unknown as`, `@ts-ignore`/`@ts-expect-error` or a non-null `!`. Use a guard instead.
 - `postgres` is loaded by NuxtHub and `ioredis` lazily by `server/utils/redis.ts`: only a booted app
   exercises them — mirror the `smoke-node` job of `.github/workflows/ci.yml` (Postgres 16 + Redis 7,
-  `DATABASE_URL` / `REDIS_URL` set at build).
+  `DATABASE_URL` / `REDIS_URL` set at build), or `smoke-redis-at-runtime` (built without Redis,
+  `REDIS_URL` given to the server; `.github/scripts/smoke-kv-session.sh` checks the session is in Redis).
+  `tests/unit/cacheBackend.test.ts` compares the Redis keys with the unstorage driver's when `REDIS_URL` is set.
 
 ## Database and auth
 - `server/db/migrations` (written by `pnpm db:generate`) is gitignored: never commit migrations;
@@ -59,7 +64,7 @@
   `organizationAdditionalFields` in `server/utils/authSchemaFields.ts`); `stripeCustomerId` comes from
   the Stripe plugin.
 - better-auth verification and rate limit live in the database: `hub:kv` has no atomic consume or
-  increment, so `cacheClient.getAndDelete` / `increment` (`server/utils/drivers.ts`) throw on purpose.
+  increment, so `cacheClient.getAndDelete` / `increment` (`server/utils/cacheBackend.ts`) throw on purpose.
 - better-auth refuses a POST without `Origin`/`Referer` (403 `MISSING_OR_NULL_ORIGIN`), as an SSR
   in-process POST from a typed URL is; `app/utils/authClientTransport.ts` adds the configured origin
   to `set-active` only, and only when `Sec-Fetch-Site` is `none` or `same-origin`.

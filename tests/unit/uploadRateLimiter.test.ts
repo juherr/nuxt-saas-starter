@@ -3,14 +3,18 @@ import type { RateLimitStore } from '~~/server/services/file/rateLimiter'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitUnavailableError, UploadRateLimiter } from '~~/server/services/file/rateLimiter'
 import { createLockedKvStore, createRedisStore, KeyedLock } from '~~/server/services/file/rateLimitStores'
-import { cacheClient } from '~~/server/utils/drivers'
+import { createCacheClient } from '~~/server/utils/cacheBackend'
 // Same module as the aliased `hub:kv`, imported by path for its test helpers.
-import { kvSetCalls, resetKvStub } from './stubs/hub-kv'
+import { kv, kvSetCalls, resetKvStub } from './stubs/hub-kv'
 
 const WINDOW_MINUTES = 10
 const WINDOW_MS = WINDOW_MINUTES * 60 * 1000
 // Start of a bucket, so tests can place hits at known offsets in the window.
 const BUCKET_START = Math.ceil(Date.UTC(2026, 0, 1) / WINDOW_MS) * WINDOW_MS
+
+// cacheClient as drivers.ts builds it without a Redis URL: on hub:kv. The
+// real one would pick Redis when REDIS_URL is set, as in the CI unit job.
+const cacheClient = createCacheClient({ kv, redis: async () => null })
 
 describe('the upload rate limiter on the in-process path', () => {
   // Passed explicitly: the default store would pick Redis when REDIS_URL is set.

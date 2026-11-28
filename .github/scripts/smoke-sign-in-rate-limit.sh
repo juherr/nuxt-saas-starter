@@ -71,8 +71,10 @@ done
 [ -n "$refused" ] \
   || fail "no 429 after $max_attempts sign-ins: the rate limiter does not refuse"
 
-retry_after=$(sed -n 's/^[Xx]-[Rr]etry-[Aa]fter:[[:space:]]*\([^[:space:]]*\).*$/\1/p' \
-  "$work/headers.txt" | head -n 1)
+# Header names are case-insensitive: match on a lowercased name.
+retry_after=$(awk -F ':' 'tolower($1) == "x-retry-after" {
+    sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]].*$/, ""); print; exit
+  }' "$work/headers.txt")
 echo "X-Retry-After: ${retry_after:-<missing>}"
 [ -n "$retry_after" ] || fail "the 429 carries no X-Retry-After header"
 if ! [[ $retry_after =~ ^[0-9]+$ ]] || [ "$retry_after" -lt 1 ] \

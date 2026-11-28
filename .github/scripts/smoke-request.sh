@@ -76,7 +76,8 @@ smoke_redact_session_token() {
     return 0
   fi
   token=$(sed -e 's/^#HttpOnly_//' -e '/^#/d' "$jar" 2>/dev/null \
-    | awk -F '\t' 'NF >= 7 && $6 ~ /better-auth\.session_token$/ { print $7; exit }')
+    | awk -F '\t' 'NF >= 7 && $6 ~ /better-auth\.session_token$/ { print $7; exit }') \
+    || token=""
   token=${token%%.*}
   if [ -z "$token" ]; then
     return 0
@@ -85,7 +86,9 @@ smoke_redact_session_token() {
     smoke_remove_body "$file" 'unexpected session token format'
     return 0
   fi
-  count=$(grep -oF -- "$token" "$file" | wc -l | tr -d ' ')
+  # grep exits 1 on a page without the token: under pipefail that would
+  # stop the caller.
+  count=$({ grep -oF -- "$token" "$file" || true; } | wc -l | tr -d ' ')
   sed "s/$token/[redacted]/g" "$file" > "$file.redacted"
   mv "$file.redacted" "$file"
   if [ "$count" -gt 0 ]; then

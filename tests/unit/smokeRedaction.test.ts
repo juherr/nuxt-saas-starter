@@ -65,13 +65,13 @@ describe('smoke_redact_headers', () => {
   it('replaces every cookie value of a headers file and keeps the names', () => {
     const file = join(dir, 'sign-in-headers.txt')
     writeFileSync(file, headers)
-    const result = bash('. "$1" && smoke_redact_headers "$2"', [smokeRequest, file])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_headers "$2"', [smokeRequest, file])
     expect(result.status).toBe(0)
     expectRedacted(file)
   })
 
   it('succeeds on a missing headers file, as after a request that got no answer', () => {
-    const result = bash('. "$1" && smoke_redact_headers "$2"', [smokeRequest, join(dir, 'none.txt')])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_headers "$2"', [smokeRequest, join(dir, 'none.txt')])
     expect(result.status).toBe(0)
   })
 })
@@ -101,7 +101,7 @@ function expectBodyRedacted(file: string) {
 function redactBody(content: string): string {
   const file = join(dir, 'body.txt')
   writeFileSync(file, content)
-  const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, file])
+  const result = bash('set -euo pipefail; . "$1" && smoke_redact_body "$2"', [smokeRequest, file])
   expect(result.status).toBe(0)
   return readFileSync(file, 'utf8')
 }
@@ -121,7 +121,7 @@ describe('smoke_redact_body', () => {
   it('replaces every JSON "token" string and keeps the rest of the body', () => {
     const file = join(dir, 'sign-in-body.txt')
     writeFileSync(file, body)
-    const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, file])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_body "$2"', [smokeRequest, file])
     expect(result.status).toBe(0)
     expectBodyRedacted(file)
   })
@@ -148,7 +148,7 @@ describe('smoke_redact_body', () => {
   })
 
   it('succeeds on a missing body file', () => {
-    const result = bash('. "$1" && smoke_redact_body "$2"', [smokeRequest, join(dir, 'none.txt')])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_body "$2"', [smokeRequest, join(dir, 'none.txt')])
     expect(result.status).toBe(0)
   })
 })
@@ -163,7 +163,7 @@ describe('smoke_redact_session_token', () => {
     const jarFile = join(dir, 'sign-in-cookies.txt')
     writeFileSync(file, content)
     writeFileSync(jarFile, jarContent)
-    const result = bash('. "$1" && smoke_redact_session_token "$2" "$3"', [smokeRequest, file, jarFile])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_session_token "$2" "$3"', [smokeRequest, file, jarFile])
     expect(result.status).toBe(0)
     return { output: result.stdout, redacted: readFileSync(file, 'utf8') }
   }
@@ -182,6 +182,15 @@ describe('smoke_redact_session_token', () => {
     expect(redacted).toBe(`[body removed: unexpected session token format, ${Buffer.byteLength(content)} bytes]\n`)
   })
 
+  // The scripts run under set -euo pipefail: a page without the token,
+  // such as a redirect answer, must not stop them.
+  it('leaves a page without the token alone and succeeds', () => {
+    const redirect = '<html>Redirecting to /smoke-ssr-refused/billing</html>\n'
+    const { output, redacted } = redactPage(redirect)
+    expect(redacted).toBe(redirect)
+    expect(output).toBe('')
+  })
+
   it('leaves the page alone when the jar holds no session token', () => {
     const { output, redacted } = redactPage(page, '# Netscape HTTP Cookie File\n')
     expect(redacted).toBe(page)
@@ -191,7 +200,7 @@ describe('smoke_redact_session_token', () => {
   it('succeeds on a missing page file', () => {
     const jarFile = join(dir, 'sign-in-cookies.txt')
     writeFileSync(jarFile, jar)
-    const result = bash('. "$1" && smoke_redact_session_token "$2" "$3"', [smokeRequest, join(dir, 'none.txt'), jarFile])
+    const result = bash('set -euo pipefail; . "$1" && smoke_redact_session_token "$2" "$3"', [smokeRequest, join(dir, 'none.txt'), jarFile])
     expect(result.status).toBe(0)
   })
 })

@@ -106,6 +106,14 @@ describe('the upload endpoint', () => {
     expect(uploadFile).toHaveBeenCalledWith(PNG, 'avatar.png', expect.objectContaining({ mimeType: 'image/png' }), 'u1', '198.51.100.7', TEST_AGENT)
   })
 
+  it('skips a forged leftmost X-Forwarded-For entry behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = TEST_IP
+
+    await upload({ ...MULTIPART, 'content-length': '2000', 'x-forwarded-for': '6.6.6.6, 198.51.100.7' })
+
+    expect(uploadFile).toHaveBeenCalledWith(PNG, 'avatar.png', expect.objectContaining({ mimeType: 'image/png' }), 'u1', '198.51.100.7', TEST_AGENT)
+  })
+
   describe('before buffering the body', () => {
     it('refuses a declared length above one file plus the multipart overhead with 413', async () => {
       await expect(upload({ ...MULTIPART, 'content-length': String(10 * 1024 * 1024) })).rejects.toMatchObject({ statusCode: 413 })

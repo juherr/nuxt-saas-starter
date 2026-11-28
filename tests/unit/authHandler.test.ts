@@ -47,6 +47,7 @@ describe('the request handed to better-auth', () => {
   beforeEach(() => {
     handler.mockClear()
     runtimeConfig.trustedProxies = ''
+    runtimeConfig.clientIpHeader = ''
   })
 
   it('carries the socket address when no proxy is trusted', async () => {
@@ -67,6 +68,45 @@ describe('the request handed to better-auth', () => {
     const request = await signIn({ 'x-forwarded-for': '203.0.113.9' })
 
     expect(request.headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe('203.0.113.9')
+  })
+
+  it('skips a forged leftmost X-Forwarded-For entry behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = SOCKET
+
+    const request = await signIn({ 'x-forwarded-for': '6.6.6.6, 198.51.100.7' })
+
+    expect(request.headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe('198.51.100.7')
+  })
+
+  // On Workers, Cloudflare sets `cf-connecting-ip` itself (the default there).
+  describe('with an edge header configured', () => {
+    beforeEach(() => {
+      runtimeConfig.clientIpHeader = 'cf-connecting-ip'
+    })
+
+    it('carries the edge address over a forged internal header and X-Forwarded-For', async () => {
+      const request = await signIn({
+        'cf-connecting-ip': '203.0.113.9',
+        [RESOLVED_CLIENT_IP_HEADER]: '6.6.6.6',
+        'x-forwarded-for': '6.6.6.6'
+      })
+
+      expect(request.headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe('203.0.113.9')
+    })
+
+    it('falls back to the socket address without the edge header', async () => {
+      const request = await signIn({ [RESOLVED_CLIENT_IP_HEADER]: '6.6.6.6', 'x-forwarded-for': '6.6.6.6' })
+
+      expect(request.headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe(SOCKET)
+    })
+
+    it('falls back to the trusted proxy chain without the edge header', async () => {
+      runtimeConfig.trustedProxies = SOCKET
+
+      const request = await signIn({ 'x-forwarded-for': '6.6.6.6, 198.51.100.7' })
+
+      expect(request.headers.get(RESOLVED_CLIENT_IP_HEADER)).toBe('198.51.100.7')
+    })
   })
 
   // SSR `useFetch('/api/auth/get-session')` runs in process: node-mock-http

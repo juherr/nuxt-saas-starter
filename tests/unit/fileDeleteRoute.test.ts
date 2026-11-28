@@ -124,4 +124,12 @@ describe('the IP recorded for a deletion', () => {
 
     expect(deleteFile).toHaveBeenCalledWith('f1', OWNER.id, '198.51.100.7', TEST_AGENT)
   })
+
+  it('skips a forged leftmost X-Forwarded-For entry behind a trusted proxy', async () => {
+    runtimeConfig.trustedProxies = TEST_IP
+
+    await removeWith({ 'x-forwarded-for': '6.6.6.6, 198.51.100.7' })
+
+    expect(deleteFile).toHaveBeenCalledWith('f1', OWNER.id, '198.51.100.7', TEST_AGENT)
+  })
 })

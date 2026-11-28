@@ -275,7 +275,9 @@ export const createBetterAuth = () => betterAuth({
   advanced: {
     // The auth handler resolves the client IP (server/utils/clientIp.ts) and
     // sets this header alone: better-auth's rate limit and session rows read
-    // it, so they agree with the audit log (#24).
+    // it, so they start from the IP the audit log records (#24). better-auth
+    // normalises it: an IPv6 address is expanded and masked to its /64
+    // (`ipv6Subnet` default), where the audit log keeps the full address.
     ipAddress: {
       ipAddressHeaders: [RESOLVED_CLIENT_IP_HEADER]
     },

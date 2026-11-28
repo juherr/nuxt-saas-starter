@@ -264,8 +264,9 @@ address unless the deployment says which proxy to trust: a client can no longer 
 `X-Forwarded-For`. Behind a reverse proxy, every request records the proxy's address, and all
 clients share one sign-in rate-limit counter, until you set one of:
 
-- `NUXT_TRUSTED_PROXIES`: comma-separated IPs or CIDR ranges of your proxies (`127.0.0.1`,
-  `10.0.0.0/8`); `X-Forwarded-For` is then read through them;
+- `NUXT_TRUSTED_PROXIES`: comma-separated IPs or CIDR ranges of your proxies, and of nothing
+  else (`127.0.0.1,::1` for a proxy on the same host, which may connect over IPv6);
+  `X-Forwarded-For` is then read through them;
 - `NUXT_CLIENT_IP_HEADER`: one header your edge sets on every request (`x-real-ip`).
 
 The `cloudflare-module` build reads `cf-connecting-ip` and needs no change. See

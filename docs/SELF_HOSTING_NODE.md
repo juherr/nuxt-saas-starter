@@ -301,17 +301,21 @@ Only trust `X-Forwarded-*` headers set by your own proxy:
 ### Client IP behind a proxy
 
 The audit log, Better Auth's rate limit and the IP of sessions record the client IP that
-`server/utils/clientIp.ts` resolves. Both settings are read when the server starts:
+`server/utils/clientIp.ts` resolves. Both settings are read at the first request:
 
 | Setting | Client IP |
 |---|---|
 | neither (default) | the socket address; `X-Forwarded-For` is ignored |
-| `NUXT_TRUSTED_PROXIES=127.0.0.1,10.0.0.0/8` | when the socket address is one of these IPs or CIDR ranges, `X-Forwarded-For` is read from right to left, skipping the listed proxies; the first other address is the client |
+| `NUXT_TRUSTED_PROXIES=127.0.0.1,::1,10.0.0.5` | when the socket address is one of these IPs or CIDR ranges, `X-Forwarded-For` is read from right to left, skipping the listed proxies; the first other address is the client |
 | `NUXT_CLIENT_IP_HEADER=x-real-ip` | that header, when it holds a single valid IP; otherwise as above |
 
 Behind a proxy with neither set, every request records the proxy's address: sign-in attempts of
 all clients then share one rate-limit counter. List every proxy hop between the client and the
-server in `NUXT_TRUSTED_PROXIES`; invalid entries are logged at start and ignored. Set
+server in `NUXT_TRUSTED_PROXIES`; invalid entries are ignored, with a warning logged at the
+first request. A proxy on the same host that connects over `localhost` may arrive from `::1`,
+which `127.0.0.1` does not cover: list both, or every client is recorded as `::1`. List only
+proxies: with `10.0.0.0/8`, a client inside that range has its own `X-Forwarded-For` read and
+chooses the IP recorded for it. Set
 `NUXT_CLIENT_IP_HEADER` only to a header your edge overwrites on every request, and keep the server
 unreachable except through it: a client that reaches the port directly can set that header to any
 value. The `cloudflare-module` build reads `cf-connecting-ip`, which Cloudflare sets on every

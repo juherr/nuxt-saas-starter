@@ -408,11 +408,15 @@ jobs:
           .github/scripts/smoke-cross-org.sh demo-sign-in globex-labs
           01934b00-0000-7000-8000-000000000102 'Globex Labs'
       # In production mode better-auth allows 3 requests per 10 s to each
-      # /sign-in path per client IP: wait out the window of the demo
-      # sign-in so the two below do not depend on the timing of the steps.
-      - name: Wait out the sign-in rate limit window
-        run: sleep 11
+      # /sign-in path per client IP. Wrong-password sign-ins (401, no
+      # session) must hit a 429 within 4 attempts, the demo sign-in above
+      # having spent part of the quota; the script then waits out the
+      # X-Retry-After it carries.
+      - name: Check that the rate limiter refuses sign-ins over the quota
+        run: .github/scripts/smoke-sign-in-rate-limit.sh demo@example.com
       # bob is a member of Acme Demo only, carol the owner of Globex Labs.
+      # The first two sign-ins of the fresh window: both answering 200
+      # proves that authentication works again once the window ended.
       - name: Sign in a member of another organization and an owner
         run: |
           .github/scripts/smoke-sign-in.sh bob bob@example.com demo-extra-password
